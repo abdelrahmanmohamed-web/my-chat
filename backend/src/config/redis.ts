@@ -1,9 +1,8 @@
 import { Redis } from "ioredis";
 
-const redisUrl = process.env.REDIS_URL;
-if (!redisUrl) throw new Error("REDIS_URL is not set");
+import { env } from "./env.ts";
 
-export const redis = new Redis(redisUrl, {
+export const redis = new Redis(env.redisUrl, {
   lazyConnect: true,
   enableOfflineQueue: false,
   maxRetriesPerRequest: 2,
