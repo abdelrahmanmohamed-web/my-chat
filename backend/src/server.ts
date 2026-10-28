@@ -8,8 +8,8 @@ import { pinoHttp } from "pino-http";
 
 import { getAccessTokenSecret } from "./config/auth-config.ts";
 import { redis } from "./config/redis.ts";
-import { authRouter } from "./routes/auth-routes.ts";
-import { sessionRouter } from "./routes/session-routes.ts";
+import { authRouter } from "./routes/auth/auth-routes.ts";
+import { sessionRouter } from "./routes/session/session-routes.ts";
 import { ServiceUnavailableError } from "./utils/service-unavailable-error.ts";
 
 const app = express();

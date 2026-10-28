@@ -6,7 +6,7 @@ import {
   JWT_AUDIENCE,
   JWT_ISSUER,
 } from "../config/auth-config.ts";
-import { sessionExists } from "../services/session-service.ts";
+import { sessionExists } from "../services/session/session-service.ts";
 
 declare module "express-serve-static-core" {
   interface Request {
