@@ -64,7 +64,5 @@ export async function revokeByRefresh(
 
 /** Checks whether the session key currently exists in Redis. */
 export async function sessionExists(sid: string): Promise<boolean> {
-  return withRedis(
-    async () => (await redis.exists(sessionKey(sid))) === 1,
-  );
+  return withRedis(async () => (await redis.exists(sessionKey(sid))) === 1);
 }

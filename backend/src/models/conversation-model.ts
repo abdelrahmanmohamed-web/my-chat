@@ -2,31 +2,12 @@ import mongoose from "mongoose";
 
 const { Schema, model, models } = mongoose;
 
-const participantSchema = new Schema(
-  {
-    userId: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    role: {
-      type: String,
-      enum: ["member", "admin"],
-      default: "member",
-    },
-    joinedAt: {
-      type: Date,
-      default: Date.now,
-    },
-  },
-  { _id: false }
-);
 
 const conversationSchema = new Schema(
   {
     type: {
       type: String,
-      enum: ["direct", "group"],
+      enum: ["direct"],
       required: true,
     },
     directKey: {
@@ -38,8 +19,10 @@ const conversationSchema = new Schema(
       ref: "User",
       required: true,
     },
-    participants: {
-      type: [participantSchema],
+    // Visibility is per participant; the conversation itself remains shared.
+    hiddenFor: {
+      type: [Schema.Types.ObjectId],
+      ref: "User",
       default: [],
     },
     name: {
@@ -50,13 +33,8 @@ const conversationSchema = new Schema(
       type: String,
       default: null,
     },
-    autoDeleteAfterSeconds: {
-      type: Number,
-      default: null,
-      min: 1,
-    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 conversationSchema.index(
@@ -65,11 +43,10 @@ conversationSchema.index(
     unique: true,
     partialFilterExpression: { type: "direct" },
     name: "unique_direct_conversation",
-  }
+  },
 );
 
 conversationSchema.index({ participantIds: 1 });
 
 export const Conversation =
-  models.Conversation ||
-  model("Conversation", conversationSchema);
+  models.Conversation || model("Conversation", conversationSchema);

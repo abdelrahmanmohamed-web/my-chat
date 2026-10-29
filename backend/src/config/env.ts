@@ -47,10 +47,7 @@ export const env = {
   redisUrl: required("REDIS_URL"),
   trustProxy: optionalNonNegativeInteger("TRUST_PROXY"),
   accessTokenTtlSeconds: positiveInteger("ACCESS_TTL", 10 * 60),
-  refreshTtlSeconds: positiveInteger(
-    "REFRESH_TTL_SECONDS",
-    15 * 24 * 60 * 60,
-  ),
+  refreshTtlSeconds: positiveInteger("REFRESH_TTL_SECONDS", 15 * 24 * 60 * 60),
   maxSessionsPerUser: positiveInteger("MAX_SESSIONS_PER_USER", 5),
   refreshGraceSeconds: nonNegativeInteger("REFRESH_GRACE_SECONDS", 10),
   loginRateLimit: positiveInteger("AUTH_LOGIN_RATE_LIMIT", 10),

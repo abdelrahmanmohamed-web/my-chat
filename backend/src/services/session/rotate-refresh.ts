@@ -9,7 +9,11 @@ import {
 } from "../../config/auth-config.ts";
 import { redis } from "../../config/redis.ts";
 import { hashRefreshToken } from "../../utils/refresh-token.ts";
-import { newRefreshSecret, sessionKey, userSessionsKey } from "./session-keys.ts";
+import {
+  newRefreshSecret,
+  sessionKey,
+  userSessionsKey,
+} from "./session-keys.ts";
 import { sessionScripts } from "./session-lua-scripts.ts";
 import { withRedis } from "./session-redis.ts";
 import type { RotationResult } from "./session-types.ts";

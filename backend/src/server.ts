@@ -6,14 +6,8 @@ import pino from "pino";
 
 import { env } from "./config/env.ts";
 import { createApp } from "./app.ts";
-import {
-  connectMongoDB,
-  disconnectMongoDB,
-} from "./infrastructure/mongodb.ts";
-import {
-  connectRedis,
-  disconnectRedis,
-} from "./infrastructure/redis.ts";
+import { connectMongoDB, disconnectMongoDB } from "./infrastructure/mongodb.ts";
+import { connectRedis, disconnectRedis } from "./infrastructure/redis.ts";
 import { redis } from "./config/redis.ts";
 
 const logger = pino({ level: env.logLevel });

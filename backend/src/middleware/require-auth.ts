@@ -35,7 +35,9 @@ export async function verifyAccessToken(
   if (
     !payload.sub ||
     typeof payload.sid !== "string" ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.sid)
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      payload.sid,
+    )
   ) {
     return null;
   }
@@ -46,7 +48,8 @@ export async function verifyAccessToken(
 export const requireAuth: RequestHandler = async (req, res, next) => {
   const user = await verifyAccessToken(req);
   if (!user) return res.status(401).json({ error: "Unauthorized" });
-  if (!(await sessionExists(user.sid))) return res.status(401).json({ error: "Unauthorized" });
+  if (!(await sessionExists(user.sid)))
+    return res.status(401).json({ error: "Unauthorized" });
 
   req.user = user;
   return next();

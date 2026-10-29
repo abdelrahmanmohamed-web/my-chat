@@ -4,20 +4,20 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["**/node_modules/**", "**/dist/**", "**/coverage/**"]
+    ignores: ["**/node_modules/**", "**/dist/**", "**/coverage/**"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
     files: ["**/*.js", "**/*.mjs", "**/*.cjs"],
     languageOptions: {
-      globals: globals.node
-    }
+      globals: globals.node,
+    },
   },
   {
     files: ["frontend/src/**/*.{ts,tsx}"],
     languageOptions: {
-      globals: globals.browser
-    }
-  }
+      globals: globals.browser,
+    },
+  },
 );

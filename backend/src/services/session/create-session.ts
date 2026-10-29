@@ -20,10 +20,7 @@ import { withRedis } from "./session-redis.ts";
 import type { SessionMeta } from "./session-types.ts";
 
 /** Creates a bounded session and returns its identifier and refresh token. */
-export async function createSession(
-  userId: string,
-  meta: SessionMeta,
-) {
+export async function createSession(userId: string, meta: SessionMeta) {
   const sid = randomUUID();
   const secret = newRefreshSecret();
   const now = Date.now();
