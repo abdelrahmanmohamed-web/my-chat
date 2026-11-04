@@ -2,7 +2,7 @@
 
 import { Router } from "express";
 
-import { rotateRefreshToken } from "../../services/auth/auth-service.ts";
+import { rotateRefreshToken } from "../../services/auth/auth.service.ts";
 import { refreshSchema } from "../../validators/auth-schemas.ts";
 
 export const tokenRouter = Router();

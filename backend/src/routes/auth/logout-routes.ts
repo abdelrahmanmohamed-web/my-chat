@@ -6,7 +6,7 @@ import { verifyAccessToken } from "../../middleware/require-auth.ts";
 import {
   logout,
   logoutByRefreshToken,
-} from "../../services/auth/auth-service.ts";
+} from "../../services/auth/auth.service.ts";
 import { refreshSchema } from "../../validators/auth-schemas.ts";
 
 export const logoutRouter = Router();

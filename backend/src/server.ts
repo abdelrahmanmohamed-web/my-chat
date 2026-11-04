@@ -10,7 +10,13 @@ import { connectMongoDB, disconnectMongoDB } from "./infrastructure/mongodb.ts";
 import { connectRedis, disconnectRedis } from "./infrastructure/redis.ts";
 import { redis } from "./config/redis.ts";
 
-const logger = pino({ level: env.logLevel });
+const logger = pino({
+  level: env.logLevel,
+  redact: {
+    paths: ["req.headers.authorization", "res.headers.cookie"],
+    censor: "[REDACTED]",
+  },
+});
 let shuttingDown = false;
 
 async function closeHttpServer(server: http.Server): Promise<void> {

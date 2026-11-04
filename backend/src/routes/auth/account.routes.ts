@@ -6,7 +6,7 @@ import { requireAuth } from "../../middleware/require-auth.ts";
 import {
   changePassword,
   getUserProfile,
-} from "../../services/auth/auth-service.ts";
+} from "../../services/auth/auth.service.ts";
 import { changePasswordSchema } from "../../validators/auth-schemas.ts";
 
 export const accountRouter = Router();

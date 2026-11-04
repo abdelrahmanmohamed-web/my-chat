@@ -2,7 +2,7 @@
 
 import { Router } from "express";
 
-import { login } from "../../services/auth/auth-service.ts";
+import { login } from "../../services/auth/auth.service.ts";
 import { credentialsSchema } from "../../validators/auth-schemas.ts";
 
 export const loginRouter = Router();
