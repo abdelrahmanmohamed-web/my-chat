@@ -29,6 +29,11 @@ import {
   type SanitizedSession,
 } from "./sessions/session.service.ts";
 
+// Pre-computed hash used to equalize login timing when the email does not exist.
+const DUMMY_PASSWORD_HASH = argon2.hash("dummy-password-for-timing-equalization", {
+  type: argon2.argon2id,
+});
+
 // ============================================================================
 // Types & Interfaces
 // ============================================================================
@@ -127,9 +132,10 @@ export async function login(
     "+passwordHash +maxSessions",
   );
 
-  const passwordMatches = user
-    ? await argon2.verify(user.passwordHash, input.password).catch(() => false)
-    : false;
+  const hashToVerify = user ? user.passwordHash : await DUMMY_PASSWORD_HASH;
+  const passwordMatches = await argon2
+    .verify(hashToVerify, input.password)
+    .catch(() => false);
 
   if (!user || !passwordMatches) {
     return { status: "invalid_credentials" };

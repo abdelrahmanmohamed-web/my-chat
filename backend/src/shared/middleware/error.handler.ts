@@ -3,20 +3,30 @@
 import type { ErrorRequestHandler } from "express";
 import type { Logger } from "pino";
 
-import { ServiceUnavailableError } from "../errors/service.unavailable.error.ts";
+function getClientErrorStatus(error: unknown): number | null {
+  if (typeof error !== "object" || error === null) return null;
+  const candidate =
+    "status" in error
+      ? error.status
+      : "statusCode" in error
+        ? error.statusCode
+        : undefined;
+  return typeof candidate === "number" && candidate >= 400 && candidate < 500
+    ? candidate
+    : null;
+}
 
 export function createErrorHandler(logger: Logger): ErrorRequestHandler {
-  return (error, _req, res, _next) => {
-    void _next;
-    if (error instanceof ServiceUnavailableError) {
-      logger.error(
-        { err: error.originalError },
-        "Authentication service unavailable",
-      );
+  return (error, _req, res, next) => {
+    if (res.headersSent) return next(error);
+
+    const status = getClientErrorStatus(error);
+    if (status !== null) {
       return res
-        .status(503)
-        .json({ error: "Authentication service unavailable" });
+        .status(status)
+        .json({ error: status === 413 ? "Payload too large" : "Bad request" });
     }
+
     logger.error({ err: error }, "Request failed");
     return res.status(500).json({ error: "Internal server error" });
   };

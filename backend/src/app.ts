@@ -4,9 +4,9 @@
  * ============================================================================
  * Creates and configures the Express application and attaches global middleware:
  * - Security headers and CORS policies via Helmet and CORS.
- * - JSON body parser with a defensive size limit.
  * - Pino HTTP request logging with redaction for authorization headers and cookies.
  * - Global API rate limiter applied to all /api routes.
+ * - JSON body parser with a defensive size limit.
  * - Application route mounting via routesRouter.
  * - Centralized error handling middleware.
  * ============================================================================
@@ -38,20 +38,22 @@ export function createApp(logger: Logger): Express {
   // Apply baseline security headers (Helmet & CORS)
   applySecurityMiddleware(app);
 
-  // Parse incoming cookies
-  app.use(cookieParser());
-
-  // Parse JSON payloads with a defensive 16kb limit
-  app.use(express.json({ limit: "16kb" }));
-
   // Attach request logging
   applyRequestLogger(app, logger);
 
   // Apply global rate limiting across all API endpoints
   app.use("/api", globalApiRateLimiter);
 
+  // Parse incoming cookies
+  app.use(cookieParser());
+
+  // Parse JSON payloads with a defensive 16kb limit
+  app.use(express.json({ limit: "16kb" }));
+
   // Mount main API routes
   app.use("/api", routesRouter);
+
+  app.use((_req, res) => { res.status(404).json({ error: "Not found" }); });
 
   // Attach centralized error handler at the end of the middleware chain
   app.use(createErrorHandler(logger));

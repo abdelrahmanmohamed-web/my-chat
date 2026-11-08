@@ -128,7 +128,7 @@ export async function createSession(
     activeAccessTokenId,
     device,
     ip: meta.ip ?? "Unknown IP",
-    userAgent: meta.userAgent ?? "Unknown Agent",
+    userAgent: (meta.userAgent ?? "Unknown Agent").slice(0, 300),
     lastActiveAt: new Date(),
     expiresAt: new Date(Date.now() + REFRESH_TTL_SECONDS * 1000),
   });

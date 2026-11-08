@@ -28,9 +28,12 @@ if (Buffer.byteLength(accessTokenSecret) < 32) {
   throw new Error("ACCESS_TOKEN_SECRET must be set to at least 32 bytes");
 }
 
-const refreshTokenSecret = process.env.REFRESH_TOKEN_SECRET ?? accessTokenSecret;
+const refreshTokenSecret = required("REFRESH_TOKEN_SECRET");
 if (Buffer.byteLength(refreshTokenSecret) < 32) {
   throw new Error("REFRESH_TOKEN_SECRET must be set to at least 32 bytes");
+}
+if (refreshTokenSecret === accessTokenSecret) {
+  throw new Error("REFRESH_TOKEN_SECRET must differ from ACCESS_TOKEN_SECRET");
 }
 
 export const env = {

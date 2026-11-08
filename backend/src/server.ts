@@ -20,6 +20,17 @@ const logger = pino({
   },
 });
 let shuttingDown = false;
+const SHUTDOWN_TIMEOUT_MS = 10_000;
+
+process.on("unhandledRejection", (reason) => {
+  logger.fatal({ err: reason }, "Unhandled promise rejection");
+  process.exit(1);
+});
+
+process.on("uncaughtException", (error) => {
+  logger.fatal({ err: error }, "Uncaught exception");
+  process.exit(1);
+});
 
 async function closeHttpServer(server: http.Server): Promise<void> {
   if (!server.listening) return Promise.resolve();
@@ -44,6 +55,11 @@ async function startServer(): Promise<void> {
       if (shuttingDown) return;
       shuttingDown = true;
       logger.info({ signal }, "Shutting down backend");
+      const forceExitTimer = setTimeout(() => {
+        logger.error("Forced shutdown after timeout");
+        process.exit(1);
+      }, SHUTDOWN_TIMEOUT_MS);
+      forceExitTimer.unref();
       try {
         await closeResources(httpServer);
         logger.info("Backend shutdown complete");

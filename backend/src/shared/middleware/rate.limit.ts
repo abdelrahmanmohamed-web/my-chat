@@ -8,6 +8,7 @@ const authRateLimitWindowMs = 15 * 60 * 1000;
 const standardOptions = {
   standardHeaders: "draft-8" as const,
   legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
 };
 
 export const globalApiRateLimiter = rateLimit({
@@ -29,8 +30,13 @@ export const registerRateLimiter = rateLimit({
   limit: env.registerRateLimit,
 });
 
+// Only failed refresh attempts count toward the limit. A 409 (concurrent
+// rotation conflict) is not abuse, so it is not counted either.
 export const refreshRateLimiter = rateLimit({
   ...standardOptions,
   windowMs: authRateLimitWindowMs,
   limit: env.refreshRateLimit,
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (_req, res) =>
+    res.statusCode < 400 || res.statusCode === 409,
 });
