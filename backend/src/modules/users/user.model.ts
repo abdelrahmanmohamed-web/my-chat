@@ -37,6 +37,12 @@ const userSchema = new Schema(
       type: String,
       default: null,
     },
+    maxSessions: {
+      type: Number,
+      default: 3,
+      min: 1,
+      max: 10,
+    },
   },
   { timestamps: true },
 );
