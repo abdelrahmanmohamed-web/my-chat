@@ -3,7 +3,7 @@
 import type { ErrorRequestHandler } from "express";
 import type { Logger } from "pino";
 
-import { ServiceUnavailableError } from "../utils/service-unavailable-error.ts";
+import { ServiceUnavailableError } from "../errors/service.unavailable.error.ts";
 
 export function createErrorHandler(logger: Logger): ErrorRequestHandler {
   return (error, _req, res, _next) => {

@@ -23,33 +23,28 @@ function optionalNonNegativeInteger(name: string): number | undefined {
   return value;
 }
 
-function nonNegativeInteger(name: string, fallback: number): number {
-  const value = Number(process.env[name] ?? fallback);
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new Error(`${name} must be a non-negative integer`);
-  }
-  return value;
-}
-
 const accessTokenSecret = required("ACCESS_TOKEN_SECRET");
 if (Buffer.byteLength(accessTokenSecret) < 32) {
   throw new Error("ACCESS_TOKEN_SECRET must be set to at least 32 bytes");
 }
 
+const refreshTokenSecret = process.env.REFRESH_TOKEN_SECRET ?? accessTokenSecret;
+if (Buffer.byteLength(refreshTokenSecret) < 32) {
+  throw new Error("REFRESH_TOKEN_SECRET must be set to at least 32 bytes");
+}
+
 export const env = {
   accessTokenSecret,
+  refreshTokenSecret,
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173",
   jwtAudience: process.env.JWT_AUDIENCE ?? "my-chat-clients",
   jwtIssuer: process.env.JWT_ISSUER ?? "my-chat-api",
   logLevel: process.env.LOG_LEVEL ?? "info",
   mongoUri: required("MONGODB_URI"),
   port: positiveInteger("PORT", 3000),
-  redisUrl: required("REDIS_URL"),
   trustProxy: optionalNonNegativeInteger("TRUST_PROXY"),
-  accessTokenTtlSeconds: positiveInteger("ACCESS_TTL", 10 * 60),
-  refreshTtlSeconds: positiveInteger("REFRESH_TTL_SECONDS", 15 * 24 * 60 * 60),
-  maxSessionsPerUser: positiveInteger("MAX_SESSIONS_PER_USER", 5),
-  refreshGraceSeconds: nonNegativeInteger("REFRESH_GRACE_SECONDS", 10),
+  accessTokenTtlSeconds: positiveInteger("ACCESS_TTL", 14 * 60), // 14 minutes
+  refreshTtlSeconds: positiveInteger("REFRESH_TTL_SECONDS", 14 * 24 * 60 * 60), // 14 days
   loginRateLimit: positiveInteger("AUTH_LOGIN_RATE_LIMIT", 10),
   registerRateLimit: positiveInteger("AUTH_REGISTER_RATE_LIMIT", 10),
   refreshRateLimit: positiveInteger("AUTH_REFRESH_RATE_LIMIT", 30),

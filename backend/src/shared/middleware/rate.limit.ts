@@ -2,7 +2,7 @@
 
 import { rateLimit } from "express-rate-limit";
 
-import { env } from "../config/env.ts";
+import { env } from "../../config/env.ts";
 
 const authRateLimitWindowMs = 15 * 60 * 1000;
 const standardOptions = {

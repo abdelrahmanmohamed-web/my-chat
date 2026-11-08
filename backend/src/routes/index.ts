@@ -1,15 +1,31 @@
-/** Mounts the application's health, authentication, and session routers. */
+/**
+ * ============================================================================
+ * Application Routes Aggregator
+ * ============================================================================
+ * Mounts all top-level application routers under the /api prefix:
+ * - Health check endpoint (/health).
+ * - Authentication and account routes (/auth).
+ * - Session management routes protected by requireAuth (/sessions).
+ * - Direct conversation routes protected by requireAuth (/conversations).
+ * ============================================================================
+ */
 
 import { Router } from "express";
 
-import { authRouter } from "./auth/auth-routes.ts";
-import { conversationRouter } from "./conversation/conversation-routes.ts";
-import { healthRouter } from "./health-routes.ts";
-import { sessionRouter } from "./session/session-routes.ts";
+import { authRouter, requireAuth, sessionRouter } from "../modules/auth/index.ts";
+import { conversationRouter } from "../modules/conversations/index.ts";
+import { healthRouter } from "./health.routes.ts";
 
 export const routesRouter = Router();
 
+// Health check endpoint
 routesRouter.use(healthRouter);
+
+// Authentication and account management routes
 routesRouter.use("/auth", authRouter);
-routesRouter.use("/sessions", sessionRouter);
-routesRouter.use("/conversations", conversationRouter);
+
+// User session management routes (protected by requireAuth)
+routesRouter.use("/sessions", requireAuth, sessionRouter);
+
+// Conversation management routes (protected by requireAuth)
+routesRouter.use("/conversations", requireAuth, conversationRouter);

@@ -7,13 +7,15 @@ import pino from "pino";
 import { env } from "./config/env.ts";
 import { createApp } from "./app.ts";
 import { connectMongoDB, disconnectMongoDB } from "./infrastructure/mongodb.ts";
-import { connectRedis, disconnectRedis } from "./infrastructure/redis.ts";
-import { redis } from "./config/redis.ts";
 
 const logger = pino({
   level: env.logLevel,
   redact: {
-    paths: ["req.headers.authorization", "res.headers.cookie"],
+    paths: [
+      "req.headers.authorization",
+      "req.headers.cookie",
+      'res.headers["set-cookie"]',
+    ],
     censor: "[REDACTED]",
   },
 });
@@ -28,18 +30,13 @@ async function closeHttpServer(server: http.Server): Promise<void> {
 
 async function closeResources(server: http.Server): Promise<void> {
   await closeHttpServer(server);
-  await Promise.allSettled([disconnectMongoDB(), disconnectRedis()]);
+  await disconnectMongoDB();
 }
 
 async function startServer(): Promise<void> {
-  redis.on("error", (error: Error) =>
-    logger.error({ err: error }, "Redis client error"),
-  );
-
   let server: http.Server | undefined;
   try {
     await connectMongoDB();
-    await connectRedis();
     const httpServer = http.createServer(createApp(logger));
     server = httpServer;
 
@@ -69,7 +66,6 @@ async function startServer(): Promise<void> {
     await Promise.allSettled([
       server ? closeHttpServer(server) : Promise.resolve(),
       disconnectMongoDB(),
-      disconnectRedis(),
     ]);
     logger.error({ err: error }, "Backend startup failed");
     process.exitCode = 1;
