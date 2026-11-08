@@ -1,13 +1,22 @@
 # Backend configuration
 
-Set `MONGODB_URI`, `REDIS_URL`, and `ACCESS_TOKEN_SECRET` before starting the backend. Session and refresh-token state lives only in Redis; the existing MongoDB refresh-token collection is not migrated or dropped automatically.
+Set `MONGODB_URI`, `ACCESS_TOKEN_SECRET`, and `REFRESH_TOKEN_SECRET` before starting the backend.
 
-Use managed Redis or enable Redis persistence with `appendonly yes`. Without persistence, a Redis restart clears all sessions and requires every user to log in again.
+Session state and refresh tokens live in MongoDB under the `Session` collection with automatic TTL expiration on `expiresAt`.
 
-Session settings can be overridden with `ACCESS_TTL` (default 600 seconds), `REFRESH_TTL_SECONDS` (default 1296000), `MAX_SESSIONS_PER_USER` (default 5), and `REFRESH_GRACE_SECONDS` (default 10).
+### Authentication Settings
+- `ACCESS_TTL`: Access token TTL in seconds (default `840` = 14 minutes). Returned in response body.
+- `REFRESH_TTL_SECONDS`: Refresh token TTL in seconds (default `1209600` = 14 days). Stored in HttpOnly cookie (`Path=/api/auth`).
+- `AUTH_LOGIN_RATE_LIMIT`: Login rate limit per IP per 15-minute window (default `10`).
+- `AUTH_REGISTER_RATE_LIMIT`: Registration rate limit per IP per 15-minute window (default `10`).
+- `AUTH_REFRESH_RATE_LIMIT`: Refresh rate limit per IP per 15-minute window (default `30`).
 
-Auth endpoint limits use a 15-minute window and can be overridden with `AUTH_LOGIN_RATE_LIMIT` (default 10 failed requests per IP; successful logins are skipped), `AUTH_REGISTER_RATE_LIMIT` (default 10 requests per IP), and `AUTH_REFRESH_RATE_LIMIT` (default 30 requests per IP). The existing general `/api` limit also applies.
-
-Set `TRUST_PROXY` to the number of trusted proxy hops when running behind Nginx, a load balancer, or a PaaS proxy. It is unset by default; without it, `req.ip` and IP-based rate limiting see the proxy's address.
-
-`POST /api/auth/logout` accepts `{ "refreshToken": "{sid}.{secret}" }` so a session can be revoked after its access token expires. If the body has no refresh token, a valid Bearer access token is used instead. The endpoint always responds with 204 unless the request body is malformed.
+### Session Management & Security
+- **Max Sessions**: Default limit of 3 sessions per user (configurable per user). If max sessions is reached upon login, returns `409 Conflict` with `error: "MAX_SESSIONS_REACHED"` and active session list. Provide `revokeSessionId` in login body to replace a session or `"all"` to revoke all.
+- **Immediate Access Token Revocation**: Each access token contains `tokenId` matching `activeAccessTokenId` in the session document. When refreshed, a new `activeAccessTokenId` is set, instantly invalidating the prior access token.
+- **Token Reuse Detection**: Refresh tokens use sequence versioning (`version`). If a stale refresh token (`version < currentVersion`) is presented, the session is immediately revoked and deleted.
+- **Session Endpoints (`/api/sessions`)**:
+  - `GET /api/sessions`: List active sessions.
+  - `PATCH /api/sessions/:id`: Update session name.
+  - `DELETE /api/sessions/:id`: Revoke specific session.
+  - `DELETE /api/sessions?exceptCurrent=true`: Revoke all sessions (optionally keeping current).
