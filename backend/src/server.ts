@@ -7,6 +7,7 @@ import pino from "pino";
 import { env } from "./config/env.ts";
 import { createApp } from "./app.ts";
 import { connectMongoDB, disconnectMongoDB } from "./infrastructure/mongodb.ts";
+import { initSocketServer, closeSocketServer } from "./infrastructure/socket.ts";
 
 const logger = pino({
   level: env.logLevel,
@@ -40,6 +41,7 @@ async function closeHttpServer(server: http.Server): Promise<void> {
 }
 
 async function closeResources(server: http.Server): Promise<void> {
+  await closeSocketServer();
   await closeHttpServer(server);
   await disconnectMongoDB();
 }
@@ -49,6 +51,7 @@ async function startServer(): Promise<void> {
   try {
     await connectMongoDB();
     const httpServer = http.createServer(createApp(logger));
+    initSocketServer(httpServer, logger);
     server = httpServer;
 
     const shutdown = async (signal: string): Promise<void> => {

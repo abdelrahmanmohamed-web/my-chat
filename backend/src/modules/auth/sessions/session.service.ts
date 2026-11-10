@@ -153,17 +153,17 @@ export async function rotateSessionToken(
   const payload = await verifyRefreshToken(presentedToken);
   if (!payload) return { status: "invalid" };
 
-  if (!mongoose.Types.ObjectId.isValid(payload.sid)) {
+  if (
+    !mongoose.Types.ObjectId.isValid(payload.sid) ||
+    !mongoose.Types.ObjectId.isValid(payload.userId)
+  ) {
     return { status: "invalid" };
   }
+
 
   const session = await Session.findById(payload.sid);
-  if (!session || session.userId.toString() !== payload.userId) {
-    return { status: "invalid" };
-  }
 
-  // Reject expired sessions
-  if (session.expiresAt <= new Date()) {
+  if (!session || session.userId.toString() !== payload.userId || session.expiresAt <= new Date()) {
     return { status: "invalid" };
   }
 

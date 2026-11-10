@@ -12,6 +12,7 @@
 
 import { Router } from "express";
 
+import { messageRouter } from "../messages/index.ts";
 import {
   conversationUpdateSchema,
   directConversationSchema,
@@ -24,6 +25,9 @@ import {
 } from "./conversation.service.ts";
 
 export const conversationRouter = Router();
+
+// Nested routes for messages within a conversation
+conversationRouter.use("/:conversationId/messages", messageRouter);
 
 // ============================================================================
 // Conversation Management Routes

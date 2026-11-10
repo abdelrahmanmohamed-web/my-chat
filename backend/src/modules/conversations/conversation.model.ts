@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 
 const { Schema, model, models } = mongoose;
 
-
 const conversationSchema = new Schema(
   {
     type: {
@@ -33,6 +32,12 @@ const conversationSchema = new Schema(
       type: String,
       default: null,
     },
+    lastMessageAt: { type: Date, default: null },
+    lastMessage: {
+      messageId: { type: Schema.Types.ObjectId, ref: "Message" },
+      senderId: { type: Schema.Types.ObjectId, ref: "User" },
+      content: { type: String, maxlength: 200 },
+    },
   },
   { timestamps: true },
 );
@@ -41,12 +46,12 @@ conversationSchema.index(
   { directKey: 1 },
   {
     unique: true,
-    partialFilterExpression: { type: "direct" },
+    partialFilterExpression: { directKey: { $type: "string" } },
     name: "unique_direct_conversation",
   },
 );
 
-conversationSchema.index({ participantIds: 1 });
+conversationSchema.index({ participantIds: 1, lastMessageAt: -1 });
 
 export const Conversation =
   models.Conversation || model("Conversation", conversationSchema);

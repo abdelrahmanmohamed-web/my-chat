@@ -36,6 +36,71 @@ export function directConversationKey(firstId: string, secondId: string): string
 }
 
 /**
+ * Represents the minimal shape of a conversation document required to resolve automatic names.
+ */
+interface ConversationDocLike {
+  type?: string;
+  name?: string | null;
+  participantIds?: (Types.ObjectId | string)[];
+}
+
+/**
+ * Resolves and attaches the automatic conversation name for direct conversations.
+ * If a conversation does not have a custom name set, its name defaults to the
+ * display name of the counterpart participant relative to the requesting user.
+ *
+ * @param conversations Array of conversation documents or plain objects
+ * @param userId Authenticated user requesting the conversations
+ */
+export async function populateAutomaticConversationNames(
+  conversations: ConversationDocLike[],
+  userId: string,
+): Promise<void> {
+  if (!conversations || conversations.length === 0) return;
+
+  const currentUserIdStr = userId.toString();
+  const counterpartIdSet = new Set<string>();
+
+  for (const conv of conversations) {
+    if (!conv.name && conv.type === "direct" && Array.isArray(conv.participantIds)) {
+      const counterpartId = conv.participantIds.find(
+        (id) => id.toString() !== currentUserIdStr,
+      );
+      if (counterpartId) {
+        counterpartIdSet.add(counterpartId.toString());
+      }
+    }
+  }
+
+  if (counterpartIdSet.size === 0) return;
+
+  const users = await User.find({
+    _id: { $in: Array.from(counterpartIdSet) },
+  })
+    .select("_id displayName")
+    .lean();
+
+  const userMap = new Map<string, string>();
+  for (const user of users) {
+    userMap.set(user._id.toString(), user.displayName);
+  }
+
+  for (const conv of conversations) {
+    if (!conv.name && conv.type === "direct" && Array.isArray(conv.participantIds)) {
+      const counterpartId = conv.participantIds.find(
+        (id) => id.toString() !== currentUserIdStr,
+      );
+      if (counterpartId) {
+        const displayName = userMap.get(counterpartId.toString());
+        if (displayName) {
+          conv.name = displayName;
+        }
+      }
+    }
+  }
+}
+
+/**
  * Determines whether an error is a MongoDB unique index duplicate key error (code 11000).
  *
  * @param error Error object to inspect
@@ -81,7 +146,7 @@ export async function createOrRestoreDirectConversation(
   }
 
   // Ensure the target participant actually exists in the database
-  const otherUser = await User.exists({ _id: otherObjectId });
+  const otherUser = await User.findById(otherObjectId).select("displayName").lean();
   if (!otherUser) return { kind: "not_found" as const };
 
   const currentId = currentObjectId.toString();
@@ -117,20 +182,30 @@ export async function createOrRestoreDirectConversation(
     await conversation.save();
   }
 
+  // Populate automatic name with counterpart's display name if no custom name is set
+  if (!conversation.name && conversation.type === "direct") {
+    conversation.name = otherUser.displayName;
+  }
+
   return { kind: "ok" as const, conversation, created };
 }
 
 /**
  * Lists all conversations visible to a user (excluding hidden ones), ordered by recency.
+ * Resolves automatic conversation names using the counterpart participant's display name.
  *
  * @param userId User identifier to fetch conversations for
- * @returns Mongoose query yielding sorted conversation documents
+ * @returns Sorted conversation documents with automatic display names resolved
  */
 export async function listVisibleConversations(userId: string) {
-  return Conversation.find({
+  const conversations = await Conversation.find({
     participantIds: userId,
     hiddenFor: { $ne: userId },
   }).sort({ updatedAt: -1, _id: -1 });
+
+  await populateAutomaticConversationNames(conversations, userId);
+
+  return conversations;
 }
 
 /**
@@ -153,6 +228,7 @@ export async function hideConversation(userId: string, conversationId: string) {
 
 /**
  * Updates conversation metadata such as display name or avatar URL.
+ * Resolves automatic conversation name if the name is cleared or unset.
  *
  * @param userId User identifier initiating the update
  * @param conversationId Conversation identifier to modify
@@ -170,9 +246,15 @@ export async function updateConversation(
   if (input.name !== undefined) updates.name = input.name;
   if (input.avatarUrl !== undefined) updates.avatarUrl = input.avatarUrl;
 
-  return Conversation.findOneAndUpdate(
+  const conversation = await Conversation.findOneAndUpdate(
     { _id: conversationId, participantIds: userId },
     { $set: updates },
-    { new: true, runValidators: true },
+    { returnDocument: "after", runValidators: true },
   );
+
+  if (conversation && !conversation.name && conversation.type === "direct") {
+    await populateAutomaticConversationNames([conversation], userId);
+  }
+
+  return conversation;
 }

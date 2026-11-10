@@ -112,6 +112,7 @@ describe("Conversation Service (conversation.service.ts)", () => {
       expect(res.conversation.participantIds.map(String)).toContain(userAId);
       expect(res.conversation.participantIds.map(String)).toContain(userBId);
       expect(res.conversation.hiddenFor).toEqual([]);
+      expect(res.conversation.name).toBe("User B");
 
       // Verify in DB
       const inDb = await Conversation.findById(res.conversation._id);
@@ -135,6 +136,7 @@ describe("Conversation Service (conversation.service.ts)", () => {
 
       expect(second.created).toBe(false);
       expect(second.conversation._id.toString()).toBe(first.conversation._id.toString());
+      expect(second.conversation.name).toBe("User A");
 
       // Ensure no duplicate conversation was created in DB
       const totalCount = await Conversation.countDocuments({ type: "direct" });
@@ -235,6 +237,32 @@ describe("Conversation Service (conversation.service.ts)", () => {
       expect(listB).toHaveLength(1);
       expect(listB[0]._id.toString()).toBe(conv1Res.conversation._id.toString());
     });
+
+    it("should automatically set conversation name to counterpart's displayName for both users", async () => {
+      // Create conversation between User A and User B
+      await createOrRestoreDirectConversation(userAId, { participantId: userBId });
+
+      // User A views conversations: name should be User B's displayName
+      const listA = await listVisibleConversations(userAId);
+      expect(listA).toHaveLength(1);
+      expect(listA[0].name).toBe("User B");
+
+      // User B views conversations: name should be User A's displayName
+      const listB = await listVisibleConversations(userBId);
+      expect(listB).toHaveLength(1);
+      expect(listB[0].name).toBe("User A");
+    });
+
+    it("should dynamically reflect counterpart displayName changes", async () => {
+      await createOrRestoreDirectConversation(userAId, { participantId: userBId });
+
+      // Update User B's displayName in the database
+      await User.updateOne({ _id: userBId }, { displayName: "Updated User B" });
+
+      // User A views conversations: name should reflect the updated displayName
+      const listA = await listVisibleConversations(userAId);
+      expect(listA[0].name).toBe("Updated User B");
+    });
   });
 
   describe("hideConversation", () => {
@@ -307,6 +335,24 @@ describe("Conversation Service (conversation.service.ts)", () => {
       const inDb = await Conversation.findById(convId);
       expect(inDb?.name).toBe("Secret Project Chat");
       expect(inDb?.avatarUrl).toBe("https://example.com/project.png");
+    });
+
+    it("should fall back to counterpart displayName when custom name is reset to null", async () => {
+      const convRes = await createOrRestoreDirectConversation(userAId, { participantId: userBId });
+      if (convRes.kind !== "ok") return;
+
+      const convId = convRes.conversation._id.toString();
+
+      // Set custom name
+      await updateConversation(userAId, convId, { name: "Custom Name" });
+
+      // Reset name to null
+      const reset = await updateConversation(userAId, convId, { name: null });
+      expect(reset?.name).toBe("User B");
+
+      // Verify in DB: stored as null
+      const inDb = await Conversation.findById(convId);
+      expect(inDb?.name).toBeNull();
     });
   });
 });

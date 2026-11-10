@@ -157,20 +157,24 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
 
       expect(res.status).toBe(201);
       const body = (await res.json()) as {
-        conversation: { _id: string; type: string; participantIds: string[] };
+        conversation: { _id: string; type: string; participantIds: string[]; name: string };
       };
       expect(body.conversation._id).toBeDefined();
       expect(body.conversation.type).toBe("direct");
       expect(body.conversation.participantIds).toContain(userA.id);
       expect(body.conversation.participantIds).toContain(userB.id);
+      expect(body.conversation.name).toBe("Route User B");
 
       // Verify listing returns this conversation
       const listRes = await fetch(`${baseUrl}/api/conversations`, {
         headers: { Authorization: `Bearer ${userA.token}` },
       });
-      const listBody = (await listRes.json()) as { conversations: Array<{ _id: string }> };
+      const listBody = (await listRes.json()) as {
+        conversations: Array<{ _id: string; name: string }>;
+      };
       expect(listBody.conversations).toHaveLength(1);
       expect(listBody.conversations[0]._id).toBe(body.conversation._id);
+      expect(listBody.conversations[0].name).toBe("Route User B");
     });
 
     it("should return 200 OK when conversation already exists (idempotent / restored)", async () => {
@@ -184,7 +188,10 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
         body: JSON.stringify({ participantId: userB.id }),
       });
       expect(firstRes.status).toBe(201);
-      const firstBody = (await firstRes.json()) as { conversation: { _id: string } };
+      const firstBody = (await firstRes.json()) as {
+        conversation: { _id: string; name: string };
+      };
+      expect(firstBody.conversation.name).toBe("Route User B");
 
       // Second call from User B to User A -> 200
       const secondRes = await fetch(`${baseUrl}/api/conversations/direct`, {
@@ -196,9 +203,12 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
         body: JSON.stringify({ participantId: userA.id }),
       });
       expect(secondRes.status).toBe(200);
-      const secondBody = (await secondRes.json()) as { conversation: { _id: string } };
+      const secondBody = (await secondRes.json()) as {
+        conversation: { _id: string; name: string };
+      };
 
       expect(secondBody.conversation._id).toBe(firstBody.conversation._id);
+      expect(secondBody.conversation.name).toBe("Route User A");
     });
   });
 
