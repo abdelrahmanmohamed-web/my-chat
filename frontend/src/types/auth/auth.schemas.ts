@@ -7,10 +7,10 @@ export const AUTH_LIMITS = {
   emailMaxLength: 254,
   usernameMinLength: 3,
   usernameMaxLength: 32,
-  usernamePattern: /^[a-zA-Z0-9_]+$/,
+  usernamePattern: /^[a-zA-Z0-9_\u0621-\u063A\u0641-\u064A\u0660-\u0669]+$/,
   displayNameMinLength: 1,
   displayNameMaxLength: 80,
-  passwordMinLength: 15,
+  passwordMinLength: 6,
   passwordMaxLength: 128,
   deviceMaxLength: 120,
   sessionNameMaxLength: 100,
@@ -52,7 +52,7 @@ export const registerSchema = z.object({
     )
     .regex(
       AUTH_LIMITS.usernamePattern,
-      "اسم المستخدم يقبل أحرفاً إنجليزية وأرقاماً وشرطة سفلية (_) فقط",
+      "اسم المستخدم يقبل أحرفاً عربية أو إنجليزية وأرقاماً وشرطة سفلية (_) فقط",
     ),
   displayName: z
     .string()

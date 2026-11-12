@@ -139,8 +139,11 @@ function ensureGeneratorEnv(): void {
 }
 
 function joinExpressPaths(base: string, segment: string): string {
-  const combined = `${base.replace(/\/+$/, "")}/${segment.replace(/^\/+/, "")}`
-    .replace(/\/+/g, "/");
+  const combined =
+    `${base.replace(/\/+$/, "")}/${segment.replace(/^\/+/, "")}`.replace(
+      /\/+/g,
+      "/",
+    );
   return combined.length > 1 ? combined.replace(/\/+$/, "") : "/";
 }
 
@@ -148,7 +151,10 @@ function expressPathToOpenApi(expressPath: string): string {
   return expressPath.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
 }
 
-function mountPathApplies(middlewareMount: string, targetMount: string): boolean {
+function mountPathApplies(
+  middlewareMount: string,
+  targetMount: string,
+): boolean {
   if (middlewareMount === "/" || middlewareMount === targetMount) return true;
   const normalizedMw = middlewareMount.replace(/\/+$/, "");
   return targetMount.startsWith(`${normalizedMw}/`);
@@ -242,7 +248,9 @@ async function discoverExpressRoutes(): Promise<DiscoveredRoute[]> {
           ),
         );
 
-        for (const [rawMethod, enabled] of Object.entries(layer.route.methods)) {
+        for (const [rawMethod, enabled] of Object.entries(
+          layer.route.methods,
+        )) {
           const method = rawMethod.toLowerCase() as HttpMethod;
           if (!enabled || !HTTP_METHODS.has(method)) continue;
 
@@ -299,12 +307,14 @@ function buildZodComponentSchemas(): Record<string, JsonObject> {
   return {
     RegisterRequest: convertZodToOpenApiSchema(registerSchema, (s) => {
       const props = s.properties as Record<string, JsonObject>;
-      props.email.description = "User email address (trimmed and stored lowercased).";
+      props.email.description =
+        "User email address (trimmed and stored lowercased).";
       props.username.description =
         "Unique username containing letters, numbers, and underscores (trimmed; lowercased on persistence).";
-      props.displayName.description = "Public display name shown in chats (trimmed).";
+      props.displayName.description =
+        "Public display name shown in chats (trimmed).";
       props.password.format = "password";
-      props.password.description = "Plaintext password (15-128 characters).";
+      props.password.description = "Plaintext password (6-128 characters).";
       return s;
     }),
 
@@ -330,7 +340,7 @@ function buildZodComponentSchemas(): Record<string, JsonObject> {
         props.currentPassword.description = "User's existing password.";
         props.newPassword.format = "password";
         props.newPassword.description =
-          "Replacement password (15-128 characters).";
+          "Replacement password (6-128 characters).";
         return s;
       },
     ),
@@ -379,7 +389,8 @@ function buildZodComponentSchemas(): Record<string, JsonObject> {
 
     SendMessageRequest: convertZodToOpenApiSchema(sendMessageSchema, (s) => {
       const props = s.properties as Record<string, JsonObject>;
-      props.content.description = "Message text content (trimmed, 1-4000 characters).";
+      props.content.description =
+        "Message text content (trimmed, 1-4000 characters).";
       props.clientId.description =
         "Optional client-generated idempotency key (trimmed, 1-100 characters). Reusing the same clientId for the same sender returns the existing message with HTTP 200.";
       return s;
@@ -716,7 +727,8 @@ function buildReusableComponents(): JsonObject {
 
     responses: {
       Unauthorized: {
-        description: "Missing, invalid, expired, or revoked Bearer access token.",
+        description:
+          "Missing, invalid, expired, or revoked Bearer access token.",
         content: {
           "application/json": {
             schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -725,7 +737,8 @@ function buildReusableComponents(): JsonObject {
         },
       },
       ConversationForbidden: {
-        description: "Authenticated user is not a participant in the conversation.",
+        description:
+          "Authenticated user is not a participant in the conversation.",
         content: {
           "application/json": {
             schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -754,7 +767,8 @@ function buildReusableComponents(): JsonObject {
         },
       },
       PayloadTooLarge: {
-        description: "JSON request body exceeded the 16kb limit configured in express.json().",
+        description:
+          "JSON request body exceeded the 16kb limit configured in express.json().",
         content: {
           "application/json": {
             schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -763,7 +777,8 @@ function buildReusableComponents(): JsonObject {
         },
       },
       TooManyRequests: {
-        description: "Rate limit exceeded (global or endpoint-specific limiter).",
+        description:
+          "Rate limit exceeded (global or endpoint-specific limiter).",
         headers: {
           RateLimit: { $ref: "#/components/headers/RateLimit" },
           "RateLimit-Policy": { $ref: "#/components/headers/RateLimitPolicy" },
@@ -794,9 +809,17 @@ function buildReusableComponents(): JsonObject {
 
 const RATE_LIMIT_SPECS: Record<
   RateLimiterId,
-  { windowMs: number; defaultLimit: number | string; skipSuccessfulRequests: boolean }
+  {
+    windowMs: number;
+    defaultLimit: number | string;
+    skipSuccessfulRequests: boolean;
+  }
 > = {
-  global: { windowMs: 420_000, defaultLimit: 300, skipSuccessfulRequests: false },
+  global: {
+    windowMs: 420_000,
+    defaultLimit: 300,
+    skipSuccessfulRequests: false,
+  },
   register: {
     windowMs: 900_000,
     defaultLimit: "env.registerRateLimit (default 10)",
@@ -854,7 +877,8 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     operationId: "getHealth",
     tags: ["Health"],
     summary: "Liveness check",
-    description: "Returns `{ status: \"ok\" }` when the HTTP server is responsive.",
+    description:
+      'Returns `{ status: "ok" }` when the HTTP server is responsive.',
     responses: {
       "200": {
         description: "Server is alive.",
@@ -928,7 +952,8 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
         ),
       },
       "409": {
-        description: "Email or username already exists (MongoDB duplicate key 11000).",
+        description:
+          "Email or username already exists (MongoDB duplicate key 11000).",
         content: jsonInline(
           { $ref: "#/components/schemas/ErrorResponse" },
           { error: "Email or username is already in use" },
@@ -960,7 +985,8 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
         content: jsonBodyRef("LoginSuccessResponse"),
       },
       "400": {
-        description: "Request body failed `credentialsSchema` validation or malformed JSON.",
+        description:
+          "Request body failed `credentialsSchema` validation or malformed JSON.",
         content: jsonErrorWithMalformedExample(
           "invalidCredentials",
           "Invalid email or password",
@@ -999,7 +1025,8 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     },
     responses: {
       "200": {
-        description: "Token rotated; new refreshToken cookie set and new accessToken returned.",
+        description:
+          "Token rotated; new refreshToken cookie set and new accessToken returned.",
         headers: {
           "Set-Cookie": { $ref: "#/components/headers/SetRefreshCookie" },
         },
@@ -1044,7 +1071,8 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     },
     responses: {
       "204": {
-        description: "Session revoked (if valid token supplied) and refreshToken cookie cleared.",
+        description:
+          "Session revoked (if valid token supplied) and refreshToken cookie cleared.",
         headers: {
           "Set-Cookie": { $ref: "#/components/headers/ClearRefreshCookie" },
         },
@@ -1095,7 +1123,8 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
         description: "Password updated and all other sessions revoked.",
       },
       "400": {
-        description: "Validation failed, current password incorrect, or malformed JSON.",
+        description:
+          "Validation failed, current password incorrect, or malformed JSON.",
         content: jsonErrorWithMalformedExample(
           "invalidDetails",
           "Invalid password details",
@@ -1174,7 +1203,10 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
       },
       "400": {
         description: "Invalid session name or malformed JSON.",
-        content: jsonErrorWithMalformedExample("invalidSessionName", "Invalid session name"),
+        content: jsonErrorWithMalformedExample(
+          "invalidSessionName",
+          "Invalid session name",
+        ),
       },
       "401": { $ref: "#/components/responses/Unauthorized" },
       "404": { $ref: "#/components/responses/SessionNotFound" },
@@ -1284,7 +1316,8 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     },
     responses: {
       "200": {
-        description: "Existing direct conversation returned or restored from hiddenFor.",
+        description:
+          "Existing direct conversation returned or restored from hiddenFor.",
         content: jsonBodyRef("ConversationResponse"),
       },
       "201": {
@@ -1294,7 +1327,10 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
       "400": {
         description:
           "Invalid body, invalid ObjectId, self-conversation attempt, or malformed JSON.",
-        content: jsonErrorWithMalformedExample("invalidParticipant", "Invalid participant"),
+        content: jsonErrorWithMalformedExample(
+          "invalidParticipant",
+          "Invalid participant",
+        ),
       },
       "401": { $ref: "#/components/responses/Unauthorized" },
       "404": {
@@ -1363,7 +1399,10 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
       },
       "400": {
         description: "Validation failed or malformed JSON.",
-        content: jsonErrorWithMalformedExample("invalidDetails", "Invalid conversation details"),
+        content: jsonErrorWithMalformedExample(
+          "invalidDetails",
+          "Invalid conversation details",
+        ),
       },
       "401": { $ref: "#/components/responses/Unauthorized" },
       "404": { $ref: "#/components/responses/ConversationNotFound" },
@@ -1527,7 +1566,8 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
         name: "conversationId",
         in: "path",
         required: true,
-        description: "Conversation identifier (24-character hex MongoDB ObjectId).",
+        description:
+          "Conversation identifier (24-character hex MongoDB ObjectId).",
         schema: { type: "string" },
       },
       {
@@ -1666,9 +1706,15 @@ interface PackageMetadata {
   license?: string;
 }
 
-function readJsonStringField(filePath: string, key: string): string | undefined {
+function readJsonStringField(
+  filePath: string,
+  key: string,
+): string | undefined {
   try {
-    const raw = JSON.parse(readFileSync(filePath, "utf8")) as Record<string, unknown>;
+    const raw = JSON.parse(readFileSync(filePath, "utf8")) as Record<
+      string,
+      unknown
+    >;
     return typeof raw[key] === "string" && raw[key].trim().length > 0
       ? raw[key].trim()
       : undefined;
@@ -1746,11 +1792,13 @@ function buildOpenApiDocument(discoveredRoutes: DiscoveredRoute[]): JsonObject {
       },
       {
         name: "Conversations",
-        description: "Direct conversation creation, listing, hiding, and metadata updates.",
+        description:
+          "Direct conversation creation, listing, hiding, and metadata updates.",
       },
       {
         name: "Messages",
-        description: "Cursor-paginated message history, sending, and read receipts.",
+        description:
+          "Cursor-paginated message history, sending, and read receipts.",
       },
     ],
     paths,
@@ -1811,7 +1859,8 @@ function validateOpenApiDocument(
     }
 
     // Security consistency with requireAuth middleware
-    const meta = ENDPOINT_SPECS[`${route.method.toUpperCase()} ${route.openApiPath}`];
+    const meta =
+      ENDPOINT_SPECS[`${route.method.toUpperCase()} ${route.openApiPath}`];
     if (meta.securityOverride === undefined) {
       const sec = operation.security as SecurityRequirement[];
       const hasBearer = sec.some((entry) => "bearerAuth" in entry);
@@ -1845,7 +1894,8 @@ function validateOpenApiDocument(
       }
     }
 
-    const responses = operation.responses as Record<string, unknown> | undefined;
+    const responses = operation.responses as
+      Record<string, unknown> | undefined;
     if (!responses || Object.keys(responses).length === 0) {
       throw new Error(
         `Empty responses on ${route.method.toUpperCase()} ${route.openApiPath}`,
@@ -1952,15 +2002,15 @@ function serializeYamlValue(value: unknown, indent: number): string {
         !Array.isArray(item) &&
         Object.keys(item).length > 0
       ) {
-        const entries = Object.entries(item).filter(
-          ([, v]) => v !== undefined,
-        );
+        const entries = Object.entries(item).filter(([, v]) => v !== undefined);
         entries.forEach(([k, v], idx) => {
           const formattedKey = formatYamlKey(k);
           const itemPrefix = idx === 0 ? `${pad}- ` : `${pad}  `;
           const childIndent = indent + 2;
           if (isInlineScalarOrEmpty(v)) {
-            lines.push(`${itemPrefix}${formattedKey}: ${serializeYamlValue(v, childIndent)}`);
+            lines.push(
+              `${itemPrefix}${formattedKey}: ${serializeYamlValue(v, childIndent)}`,
+            );
           } else {
             lines.push(`${itemPrefix}${formattedKey}:`);
             lines.push(serializeYamlBlock(v, childIndent + 2));
@@ -1984,11 +2034,17 @@ function serializeYamlValue(value: unknown, indent: number): string {
     return serializeObjectEntries(entries, indent);
   }
 
-  throw new Error(`Unsupported value type in YAML serialization: ${typeof value}`);
+  throw new Error(
+    `Unsupported value type in YAML serialization: ${typeof value}`,
+  );
 }
 
 function isInlineScalarOrEmpty(value: unknown): boolean {
-  if (value === null || typeof value === "boolean" || typeof value === "number") {
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "number"
+  ) {
     return true;
   }
   if (typeof value === "string") {

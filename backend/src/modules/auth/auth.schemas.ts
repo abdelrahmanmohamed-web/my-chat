@@ -7,9 +7,9 @@ export const registerSchema = z.object({
     .trim()
     .min(3)
     .max(32)
-    .regex(/^[a-zA-Z0-9_]+$/),
+    .regex(/^[a-zA-Z0-9_\u0621-\u063A\u0641-\u064A\u0660-\u0669]+$/),
   displayName: z.string().trim().min(1).max(80),
-  password: z.string().min(15).max(128),
+  password: z.string().min(6).max(128),
 });
 
 export const credentialsSchema = z.object({
@@ -22,7 +22,7 @@ export const credentialsSchema = z.object({
 
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1).max(128),
-  newPassword: z.string().min(15).max(128),
+  newPassword: z.string().min(6).max(128),
 });
 
 export const updateSessionNameSchema = z.object({

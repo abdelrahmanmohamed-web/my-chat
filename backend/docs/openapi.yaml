@@ -1032,7 +1032,7 @@ components:
           type: string
           minLength: 3
           maxLength: 32
-          pattern: "^[a-zA-Z0-9_]+$"
+          pattern: "^[a-zA-Z0-9_\\u0621-\\u063A\\u0641-\\u064A\\u0660-\\u0669]+$"
           description: "Unique username containing letters, numbers, and underscores (trimmed; lowercased on persistence)."
         displayName:
           type: string
@@ -1041,10 +1041,10 @@ components:
           description: "Public display name shown in chats (trimmed)."
         password:
           type: string
-          minLength: 15
+          minLength: 6
           maxLength: 128
           format: password
-          description: "Plaintext password (15-128 characters)."
+          description: "Plaintext password (6-128 characters)."
       required:
         - email
         - username
@@ -1092,10 +1092,10 @@ components:
           description: "User's existing password."
         newPassword:
           type: string
-          minLength: 15
+          minLength: 6
           maxLength: 128
           format: password
-          description: "Replacement password (15-128 characters)."
+          description: "Replacement password (6-128 characters)."
       required:
         - currentPassword
         - newPassword
