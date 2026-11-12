@@ -1,17 +1,15 @@
-import React from "react";
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { App } from "@/app/App";
+import "./index.css";
 
-function App() {
-  return (
-    <main>
-      <h1>My Chat</h1>
-      <p>Frontend is running.</p>
-    </main>
-  );
+const rootElement = document.getElementById("root");
+if (!rootElement) {
+  throw new Error("Root element #root was not found");
 }
 
-createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
+createRoot(rootElement).render(
+  <StrictMode>
     <App />
-  </React.StrictMode>,
+  </StrictMode>,
 );

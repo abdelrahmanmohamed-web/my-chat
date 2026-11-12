@@ -1,0 +1,282 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "IBM Plex Sans Arabic", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Core shadcn semantic tokens */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Chart tokens */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Sidebar (chat list pane) tokens */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* WhatsApp 1-to-1 chat domain tokens */
+  --color-app-canvas: var(--app-canvas);
+  --color-panel-header: var(--panel-header);
+  --color-panel-header-foreground: var(--panel-header-foreground);
+  --color-chat-bg: var(--chat-bg);
+  --color-bubble-in: var(--bubble-in);
+  --color-bubble-in-foreground: var(--bubble-in-foreground);
+  --color-bubble-out: var(--bubble-out);
+  --color-bubble-out-foreground: var(--bubble-out-foreground);
+  --color-bubble-meta: var(--bubble-meta);
+  --color-chat-pill: var(--chat-pill);
+  --color-chat-pill-foreground: var(--chat-pill-foreground);
+  --color-unread: var(--unread);
+  --color-unread-foreground: var(--unread-foreground);
+  --color-online: var(--online);
+  --color-receipt-sent: var(--receipt-sent);
+  --color-receipt-read: var(--receipt-read);
+  --color-connection-banner: var(--connection-banner);
+  --color-connection-banner-foreground: var(--connection-banner-foreground);
+
+  /* Crisp WhatsApp geometry derived from --radius (8px default) */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --radius: 0.5rem;
+
+  /* Light Mode — WhatsApp Web */
+  --background: #ffffff;
+  --foreground: #111b21;
+  --card: #ffffff;
+  --card-foreground: #111b21;
+  --popover: #ffffff;
+  --popover-foreground: #111b21;
+  --primary: #008069;
+  --primary-foreground: #ffffff;
+  --secondary: #f0f2f5;
+  --secondary-foreground: #111b21;
+  --muted: #f0f2f5;
+  --muted-foreground: #667781;
+  --accent: #f5f6f6;
+  --accent-foreground: #111b21;
+  --destructive: #ea0038;
+  --destructive-foreground: #ffffff;
+  --border: #e9edef;
+  --input: #e9edef;
+  --ring: #008069;
+
+  --chart-1: #008069;
+  --chart-2: #00a884;
+  --chart-3: #53bdeb;
+  --chart-4: #667781;
+  --chart-5: #111b21;
+
+  /* Chat list sidebar */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #111b21;
+  --sidebar-primary: #008069;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f0f2f5;
+  --sidebar-accent-foreground: #111b21;
+  --sidebar-border: #e9edef;
+  --sidebar-ring: #008069;
+
+  /* Chat surfaces, bubbles & statuses */
+  --app-canvas: #eae6df;
+  --panel-header: #f0f2f5;
+  --panel-header-foreground: #54656f;
+  --chat-bg: #efeae2;
+  --bubble-in: #ffffff;
+  --bubble-in-foreground: #111b21;
+  --bubble-out: #d9fdd3;
+  --bubble-out-foreground: #111b21;
+  --bubble-meta: #667781;
+  --chat-pill: rgb(255 255 255 / 0.94);
+  --chat-pill-foreground: #54656f;
+  --unread: #25d366;
+  --unread-foreground: #111b21;
+  --online: #008069;
+  --receipt-sent: #667781;
+  --receipt-read: #53bdeb;
+  --connection-banner: #fed859;
+  --connection-banner-foreground: #111b21;
+
+  --shadow-bubble: 0 1px 0.5px rgb(11 20 26 / 0.13);
+  --shadow-pill: 0 1px 2px rgb(11 20 26 / 0.12);
+  --scrollbar-thumb: rgb(17 27 33 / 0.2);
+  --scrollbar-thumb-hover: rgb(17 27 33 / 0.32);
+
+  /* Subtle geometric chat backdrop pattern (no external asset dependency) */
+  --chat-wallpaper-image: url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23111b21' stroke-opacity='0.045' stroke-width='1.2'%3E%3Cpath d='M18 22h18a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H24l-6 5V22z'/%3E%3Ccircle cx='88' cy='28' r='9'/%3E%3Cpath d='M84 28l3 3 5-6'/%3E%3Cpath d='M68 82h20a4 4 0 0 1 4 4v9a4 4 0 0 1-4 4H74l-6 5V82z'/%3E%3Ccircle cx='28' cy='88' r='7'/%3E%3Cpath d='M55 48l4 4-4 4-4-4z'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+.dark {
+  /* Dark Mode — WhatsApp Web */
+  --background: #111b21;
+  --foreground: #e9edef;
+  --card: #111b21;
+  --card-foreground: #e9edef;
+  --popover: #233138;
+  --popover-foreground: #e9edef;
+  --primary: #00a884;
+  --primary-foreground: #111b21;
+  --secondary: #202c33;
+  --secondary-foreground: #e9edef;
+  --muted: #202c33;
+  --muted-foreground: #8696a0;
+  --accent: #2a3942;
+  --accent-foreground: #e9edef;
+  --destructive: #f15c6d;
+  --destructive-foreground: #111b21;
+  --border: #222e35;
+  --input: #2a3942;
+  --ring: #00a884;
+
+  --chart-1: #00a884;
+  --chart-2: #53bdeb;
+  --chart-3: #005c4b;
+  --chart-4: #8696a0;
+  --chart-5: #e9edef;
+
+  /* Chat list sidebar */
+  --sidebar: #111b21;
+  --sidebar-foreground: #e9edef;
+  --sidebar-primary: #00a884;
+  --sidebar-primary-foreground: #111b21;
+  --sidebar-accent: #2a3942;
+  --sidebar-accent-foreground: #e9edef;
+  --sidebar-border: #222e35;
+  --sidebar-ring: #00a884;
+
+  /* Chat surfaces, bubbles & statuses */
+  --app-canvas: #0c1317;
+  --panel-header: #202c33;
+  --panel-header-foreground: #aebac1;
+  --chat-bg: #0b141a;
+  --bubble-in: #202c33;
+  --bubble-in-foreground: #e9edef;
+  --bubble-out: #005c4b;
+  --bubble-out-foreground: #e9edef;
+  --bubble-meta: rgb(233 237 239 / 0.6);
+  --chat-pill: #182229;
+  --chat-pill-foreground: #8696a0;
+  --unread: #00a884;
+  --unread-foreground: #111b21;
+  --online: #00a884;
+  --receipt-sent: #8696a0;
+  --receipt-read: #53bdeb;
+  --connection-banner: #2a2414;
+  --connection-banner-foreground: #ffd279;
+
+  --shadow-bubble: 0 1px 0.5px rgb(0 0 0 / 0.28);
+  --shadow-pill: 0 1px 2px rgb(0 0 0 / 0.35);
+  --scrollbar-thumb: rgb(233 237 239 / 0.16);
+  --scrollbar-thumb-hover: rgb(233 237 239 / 0.28);
+
+  --chat-wallpaper-image: url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23e9edef' stroke-opacity='0.04' stroke-width='1.2'%3E%3Cpath d='M18 22h18a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H24l-6 5V22z'/%3E%3Ccircle cx='88' cy='28' r='9'/%3E%3Cpath d='M84 28l3 3 5-6'/%3E%3Cpath d='M68 82h20a4 4 0 0 1 4 4v9a4 4 0 0 1-4 4H74l-6 5V82z'/%3E%3Ccircle cx='28' cy='88' r='7'/%3E%3Cpath d='M55 48l4 4-4 4-4-4z'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    @apply font-sans antialiased;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border-radius: 9999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@utility chat-wallpaper {
+  background-color: var(--chat-bg);
+  background-image: var(--chat-wallpaper-image);
+  background-size: 160px 160px;
+}
+
+@utility shadow-bubble {
+  box-shadow: var(--shadow-bubble);
+}
+
+@utility shadow-pill {
+  box-shadow: var(--shadow-pill);
+}

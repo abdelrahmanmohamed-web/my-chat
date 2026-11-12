@@ -93,6 +93,8 @@ interface EndpointMetadata {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const BACKEND_ROOT = path.resolve(__dirname, "..");
+const ROOT_PACKAGE_JSON_PATH = path.resolve(BACKEND_ROOT, "..", "package.json");
+const BACKEND_PACKAGE_JSON_PATH = path.join(BACKEND_ROOT, "package.json");
 const OUTPUT_PATH = path.join(BACKEND_ROOT, "docs", "openapi.yaml");
 
 const HTTP_METHODS = new Set<HttpMethod>([
@@ -366,7 +368,10 @@ function buildZodComponentSchemas(): Record<string, JsonObject> {
           ...s,
           description:
             "At least one of `name` or `avatarUrl` must be provided in the request body.",
-          anyOf: [{ required: ["name"] }, { required: ["avatarUrl"] }],
+          anyOf: [
+            { type: "object", required: ["name"] },
+            { type: "object", required: ["avatarUrl"] },
+          ],
           "x-zod-refine": "At least one conversation property is required",
         };
       },
@@ -419,7 +424,7 @@ function buildReusableComponents(): JsonObject {
       },
       ClearRefreshCookie: {
         description:
-          "Clears the refreshToken cookie (Path=/api/auth, HttpOnly, SameSite=Lax).",
+          "Clears the refreshToken cookie (Path=/api/auth, HttpOnly, SameSite=Lax, Secure in production).",
         schema: {
           type: "string",
           example:
@@ -503,6 +508,14 @@ function buildReusableComponents(): JsonObject {
           username: { type: "string" },
           displayName: { type: "string" },
           avatarUrl: { type: "string", nullable: true },
+        },
+      },
+
+      UserResponse: {
+        type: "object",
+        required: ["user"],
+        properties: {
+          user: { $ref: "#/components/schemas/PublicUser" },
         },
       },
 
@@ -601,6 +614,8 @@ function buildReusableComponents(): JsonObject {
           "name",
           "avatarUrl",
           "lastMessageAt",
+          "createdAt",
+          "updatedAt",
         ],
         properties: {
           _id: { type: "string", pattern: OBJECT_ID_PATTERN },
@@ -681,6 +696,22 @@ function buildReusableComponents(): JsonObject {
           __v: { type: "integer" },
         },
       },
+
+      ConversationResponse: {
+        type: "object",
+        required: ["conversation"],
+        properties: {
+          conversation: { $ref: "#/components/schemas/Conversation" },
+        },
+      },
+
+      MessageResponse: {
+        type: "object",
+        required: ["message"],
+        properties: {
+          message: { $ref: "#/components/schemas/Message" },
+        },
+      },
     },
 
     responses: {
@@ -690,6 +721,35 @@ function buildReusableComponents(): JsonObject {
           "application/json": {
             schema: { $ref: "#/components/schemas/ErrorResponse" },
             example: { error: "Unauthorized" },
+          },
+        },
+      },
+      ConversationForbidden: {
+        description: "Authenticated user is not a participant in the conversation.",
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/ErrorResponse" },
+            example: { error: "Forbidden" },
+          },
+        },
+      },
+      SessionNotFound: {
+        description:
+          "Session not found, not owned by caller, or invalid ObjectId.",
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/ErrorResponse" },
+            example: { error: "Session not found" },
+          },
+        },
+      },
+      ConversationNotFound: {
+        description:
+          "Conversation not found, caller is not a participant, or invalid ObjectId.",
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/ErrorResponse" },
+            example: { error: "Conversation not found" },
           },
         },
       },
@@ -749,7 +809,8 @@ const RATE_LIMIT_SPECS: Record<
   },
   refresh: {
     windowMs: 900_000,
-    defaultLimit: "env.refreshRateLimit (default 30; 409 not counted)",
+    defaultLimit:
+      "env.refreshRateLimit (default 30; rate-limiter filter exempts 409 though /refresh emits 200 or 401)",
     skipSuccessfulRequests: true,
   },
 };
@@ -767,6 +828,23 @@ function jsonInline(schema: JsonObject, example?: unknown): JsonObject {
     "application/json": {
       schema,
       ...(example !== undefined ? { example } : {}),
+    },
+  };
+}
+
+function jsonErrorWithMalformedExample(
+  primaryKey: string,
+  primaryError: string,
+  extraExamples: Record<string, { value: Record<string, unknown> }> = {},
+): JsonObject {
+  return {
+    "application/json": {
+      schema: { $ref: "#/components/schemas/ErrorResponse" },
+      examples: {
+        [primaryKey]: { value: { error: primaryError } },
+        ...extraExamples,
+        malformedJson: { value: { error: "Bad request" } },
+      },
     },
   };
 }
@@ -840,17 +918,13 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     responses: {
       "201": {
         description: "User account created.",
-        content: jsonInline({
-          type: "object",
-          required: ["user"],
-          properties: { user: { $ref: "#/components/schemas/PublicUser" } },
-        }),
+        content: jsonBodyRef("UserResponse"),
       },
       "400": {
         description: "Validation failed or malformed JSON body.",
-        content: jsonInline(
-          { $ref: "#/components/schemas/ErrorResponse" },
-          { error: "Invalid registration details" },
+        content: jsonErrorWithMalformedExample(
+          "invalidDetails",
+          "Invalid registration details",
         ),
       },
       "409": {
@@ -887,9 +961,9 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
       },
       "400": {
         description: "Request body failed `credentialsSchema` validation or malformed JSON.",
-        content: jsonInline(
-          { $ref: "#/components/schemas/ErrorResponse" },
-          { error: "Invalid email or password" },
+        content: jsonErrorWithMalformedExample(
+          "invalidCredentials",
+          "Invalid email or password",
         ),
       },
       "401": {
@@ -997,11 +1071,7 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     responses: {
       "200": {
         description: "Authenticated user profile.",
-        content: jsonInline({
-          type: "object",
-          required: ["user"],
-          properties: { user: { $ref: "#/components/schemas/PublicUser" } },
-        }),
+        content: jsonBodyRef("UserResponse"),
       },
       "401": { $ref: "#/components/responses/Unauthorized" },
       "429": { $ref: "#/components/responses/TooManyRequests" },
@@ -1026,19 +1096,15 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
       },
       "400": {
         description: "Validation failed, current password incorrect, or malformed JSON.",
-        content: {
-          "application/json": {
-            schema: { $ref: "#/components/schemas/ErrorResponse" },
-            examples: {
-              invalidDetails: {
-                value: { error: "Invalid password details" },
-              },
-              wrongPassword: {
-                value: { error: "Current password is incorrect" },
-              },
+        content: jsonErrorWithMalformedExample(
+          "invalidDetails",
+          "Invalid password details",
+          {
+            wrongPassword: {
+              value: { error: "Current password is incorrect" },
             },
           },
-        },
+        ),
       },
       "401": { $ref: "#/components/responses/Unauthorized" },
       "413": { $ref: "#/components/responses/PayloadTooLarge" },
@@ -1108,19 +1174,10 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
       },
       "400": {
         description: "Invalid session name or malformed JSON.",
-        content: jsonInline(
-          { $ref: "#/components/schemas/ErrorResponse" },
-          { error: "Invalid session name" },
-        ),
+        content: jsonErrorWithMalformedExample("invalidSessionName", "Invalid session name"),
       },
       "401": { $ref: "#/components/responses/Unauthorized" },
-      "404": {
-        description: "Session not found, not owned by caller, or invalid ObjectId.",
-        content: jsonInline(
-          { $ref: "#/components/schemas/ErrorResponse" },
-          { error: "Session not found" },
-        ),
-      },
+      "404": { $ref: "#/components/responses/SessionNotFound" },
       "413": { $ref: "#/components/responses/PayloadTooLarge" },
       "429": { $ref: "#/components/responses/TooManyRequests" },
       "500": { $ref: "#/components/responses/InternalServerError" },
@@ -1139,7 +1196,7 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
         in: "query",
         required: false,
         description:
-          "When strictly `'true'`, preserves the caller's current session (`req.query.exceptCurrent === 'true'`).",
+          "When strictly `'true'`, preserves the caller's current session (`req.query.exceptCurrent === 'true'`; other values such as `'false'` or `'1'` evaluate as false and do not return 400).",
         schema: { type: "boolean" },
       },
     ],
@@ -1182,13 +1239,7 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     responses: {
       "204": { description: "Session revoked." },
       "401": { $ref: "#/components/responses/Unauthorized" },
-      "404": {
-        description: "Session not found, not owned by caller, or invalid ObjectId.",
-        content: jsonInline(
-          { $ref: "#/components/schemas/ErrorResponse" },
-          { error: "Session not found" },
-        ),
-      },
+      "404": { $ref: "#/components/responses/SessionNotFound" },
       "429": { $ref: "#/components/responses/TooManyRequests" },
       "500": { $ref: "#/components/responses/InternalServerError" },
     },
@@ -1234,31 +1285,16 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     responses: {
       "200": {
         description: "Existing direct conversation returned or restored from hiddenFor.",
-        content: jsonInline({
-          type: "object",
-          required: ["conversation"],
-          properties: {
-            conversation: { $ref: "#/components/schemas/Conversation" },
-          },
-        }),
+        content: jsonBodyRef("ConversationResponse"),
       },
       "201": {
         description: "New direct conversation created.",
-        content: jsonInline({
-          type: "object",
-          required: ["conversation"],
-          properties: {
-            conversation: { $ref: "#/components/schemas/Conversation" },
-          },
-        }),
+        content: jsonBodyRef("ConversationResponse"),
       },
       "400": {
         description:
           "Invalid body, invalid ObjectId, self-conversation attempt, or malformed JSON.",
-        content: jsonInline(
-          { $ref: "#/components/schemas/ErrorResponse" },
-          { error: "Invalid participant" },
-        ),
+        content: jsonErrorWithMalformedExample("invalidParticipant", "Invalid participant"),
       },
       "401": { $ref: "#/components/responses/Unauthorized" },
       "404": {
@@ -1293,14 +1329,7 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     responses: {
       "204": { description: "Conversation hidden for caller." },
       "401": { $ref: "#/components/responses/Unauthorized" },
-      "404": {
-        description:
-          "Conversation not found, caller is not a participant, or invalid ObjectId.",
-        content: jsonInline(
-          { $ref: "#/components/schemas/ErrorResponse" },
-          { error: "Conversation not found" },
-        ),
-      },
+      "404": { $ref: "#/components/responses/ConversationNotFound" },
       "429": { $ref: "#/components/responses/TooManyRequests" },
       "500": { $ref: "#/components/responses/InternalServerError" },
     },
@@ -1330,30 +1359,14 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     responses: {
       "200": {
         description: "Updated conversation.",
-        content: jsonInline({
-          type: "object",
-          required: ["conversation"],
-          properties: {
-            conversation: { $ref: "#/components/schemas/Conversation" },
-          },
-        }),
+        content: jsonBodyRef("ConversationResponse"),
       },
       "400": {
         description: "Validation failed or malformed JSON.",
-        content: jsonInline(
-          { $ref: "#/components/schemas/ErrorResponse" },
-          { error: "Invalid conversation details" },
-        ),
+        content: jsonErrorWithMalformedExample("invalidDetails", "Invalid conversation details"),
       },
       "401": { $ref: "#/components/responses/Unauthorized" },
-      "404": {
-        description:
-          "Conversation not found, caller is not a participant, or invalid ObjectId.",
-        content: jsonInline(
-          { $ref: "#/components/schemas/ErrorResponse" },
-          { error: "Conversation not found" },
-        ),
-      },
+      "404": { $ref: "#/components/responses/ConversationNotFound" },
       "413": { $ref: "#/components/responses/PayloadTooLarge" },
       "429": { $ref: "#/components/responses/TooManyRequests" },
       "500": { $ref: "#/components/responses/InternalServerError" },
@@ -1426,13 +1439,7 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
         },
       },
       "401": { $ref: "#/components/responses/Unauthorized" },
-      "403": {
-        description: "Authenticated user is not a participant in the conversation.",
-        content: jsonInline(
-          { $ref: "#/components/schemas/ErrorResponse" },
-          { error: "Forbidden" },
-        ),
-      },
+      "403": { $ref: "#/components/responses/ConversationForbidden" },
       "429": { $ref: "#/components/responses/TooManyRequests" },
       "500": { $ref: "#/components/responses/InternalServerError" },
     },
@@ -1462,19 +1469,11 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     responses: {
       "200": {
         description: "Duplicate submission matched by `clientId` (idempotent).",
-        content: jsonInline({
-          type: "object",
-          required: ["message"],
-          properties: { message: { $ref: "#/components/schemas/Message" } },
-        }),
+        content: jsonBodyRef("MessageResponse"),
       },
       "201": {
         description: "New message created.",
-        content: jsonInline({
-          type: "object",
-          required: ["message"],
-          properties: { message: { $ref: "#/components/schemas/Message" } },
-        }),
+        content: jsonBodyRef("MessageResponse"),
       },
       "400": {
         description:
@@ -1502,18 +1501,15 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
               invalidConversationId: {
                 value: { error: "Invalid conversation ID" },
               },
+              malformedJson: {
+                value: { error: "Bad request" },
+              },
             },
           },
         },
       },
       "401": { $ref: "#/components/responses/Unauthorized" },
-      "403": {
-        description: "Authenticated user is not a participant in the conversation.",
-        content: jsonInline(
-          { $ref: "#/components/schemas/ErrorResponse" },
-          { error: "Forbidden" },
-        ),
-      },
+      "403": { $ref: "#/components/responses/ConversationForbidden" },
       "413": { $ref: "#/components/responses/PayloadTooLarge" },
       "429": { $ref: "#/components/responses/TooManyRequests" },
       "500": { $ref: "#/components/responses/InternalServerError" },
@@ -1562,13 +1558,7 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
         ),
       },
       "401": { $ref: "#/components/responses/Unauthorized" },
-      "403": {
-        description: "Authenticated user is not a participant in the conversation.",
-        content: jsonInline(
-          { $ref: "#/components/schemas/ErrorResponse" },
-          { error: "Forbidden" },
-        ),
-      },
+      "403": { $ref: "#/components/responses/ConversationForbidden" },
       "404": {
         description: "Message not found in this conversation.",
         content: jsonInline(
@@ -1671,8 +1661,37 @@ function buildOperation(
   return operation;
 }
 
+interface PackageMetadata {
+  version: string;
+  license?: string;
+}
+
+function readJsonStringField(filePath: string, key: string): string | undefined {
+  try {
+    const raw = JSON.parse(readFileSync(filePath, "utf8")) as Record<string, unknown>;
+    return typeof raw[key] === "string" && raw[key].trim().length > 0
+      ? raw[key].trim()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function loadPackageMetadata(): PackageMetadata {
+  return {
+    version:
+      readJsonStringField(BACKEND_PACKAGE_JSON_PATH, "version") ??
+      readJsonStringField(ROOT_PACKAGE_JSON_PATH, "version") ??
+      "0.0.0",
+    license:
+      readJsonStringField(BACKEND_PACKAGE_JSON_PATH, "license") ??
+      readJsonStringField(ROOT_PACKAGE_JSON_PATH, "license"),
+  };
+}
+
 function buildOpenApiDocument(discoveredRoutes: DiscoveredRoute[]): JsonObject {
   const paths: Record<string, Record<string, JsonObject>> = {};
+  const pkg = loadPackageMetadata();
 
   for (const route of discoveredRoutes) {
     const key = `${route.method.toUpperCase()} ${route.openApiPath}`;
@@ -1691,20 +1710,24 @@ function buildOpenApiDocument(discoveredRoutes: DiscoveredRoute[]): JsonObject {
     openapi: "3.0.3",
     info: {
       title: "MyChat Backend API",
-      version: "0.0.0",
+      version: pkg.version,
+      ...(pkg.license ? { license: { name: pkg.license } } : {}),
       description: [
         "REST API specification for the MyChat Express 5 + TypeScript + Zod + MongoDB backend.",
         "",
         "Authentication uses short-lived HS256 JWT access tokens in the `Authorization: Bearer <token>` header",
-        "paired with an `HttpOnly`, `SameSite=Lax` `refreshToken` cookie scoped to `/api/auth`.",
-        "All `/api/*` routes are subject to global rate limiting (`draft-8` `RateLimit` / `RateLimit-Policy` headers).",
+        "paired with an `HttpOnly`, `SameSite=Lax` (`Secure` in production) `refreshToken` cookie scoped to `/api/auth`.",
+        "All `/api/*` routes are subject to global rate limiting, emitting `draft-8` `RateLimit` / `RateLimit-Policy` headers on `/api/*` responses (not only `429`).",
+        '`express.json({ limit: "16kb" })` runs globally before route handlers, so malformed or oversized JSON bodies return `400` (`Bad request`) or `413` (`Payload too large`) even on endpoints without a declared `requestBody`.',
+        "String request fields backed by Zod schemas with `.trim()` are trimmed prior to regex, length, and `ObjectId` validation.",
         "Real-time WebSocket events (Socket.io) share the same HTTP server outside REST `paths`.",
       ].join("\n"),
     },
     servers: [
       {
-        url: "http://localhost:3000",
-        description: "Local development server (default PORT=3000 from src/config/env.ts)",
+        url: "/",
+        description:
+          "Relative API root (same-origin deployment; in local development Express listens on PORT=3000 by default from src/config/env.ts)",
       },
     ],
     tags: [

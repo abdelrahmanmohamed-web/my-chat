@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "skills": {
+    "react-virtuoso": {
+      "source": "virtuoso-dev/skills",
+      "sourceType": "github",
+      "skillPath": "react-virtuoso/SKILL.md",
+      "computedHash": "8f50a7221581e7a3d33c10f4bdc12cb406fddb97385763b37957b57b7148348d"
+    },
+    "shadcn": {
+      "source": "shadcn-ui/ui",
+      "sourceType": "github",
+      "skillPath": "skills/shadcn/SKILL.md",
+      "computedHash": "388962d16c7a4f13aaeee0d8f128e50a87df8553d42ef7988c39c0e1c74a40e8"
+    }
+  }
+}

@@ -2,16 +2,20 @@ openapi: 3.0.3
 info:
   title: MyChat Backend API
   version: 0.0.0
+  license:
+    name: ISC
   description: |-
     REST API specification for the MyChat Express 5 + TypeScript + Zod + MongoDB backend.
 
     Authentication uses short-lived HS256 JWT access tokens in the `Authorization: Bearer <token>` header
-    paired with an `HttpOnly`, `SameSite=Lax` `refreshToken` cookie scoped to `/api/auth`.
-    All `/api/*` routes are subject to global rate limiting (`draft-8` `RateLimit` / `RateLimit-Policy` headers).
+    paired with an `HttpOnly`, `SameSite=Lax` (`Secure` in production) `refreshToken` cookie scoped to `/api/auth`.
+    All `/api/*` routes are subject to global rate limiting, emitting `draft-8` `RateLimit` / `RateLimit-Policy` headers on `/api/*` responses (not only `429`).
+    `express.json({ limit: "16kb" })` runs globally before route handlers, so malformed or oversized JSON bodies return `400` (`Bad request`) or `413` (`Payload too large`) even on endpoints without a declared `requestBody`.
+    String request fields backed by Zod schemas with `.trim()` are trimmed prior to regex, length, and `ObjectId` validation.
     Real-time WebSocket events (Socket.io) share the same HTTP server outside REST `paths`.
 servers:
-  - url: "http://localhost:3000"
-    description: "Local development server (default PORT=3000 from src/config/env.ts)"
+  - url: /
+    description: "Relative API root (same-origin deployment; in local development Express listens on PORT=3000 by default from src/config/env.ts)"
 tags:
   - name: Health
     description: System liveness and database readiness endpoints.
@@ -131,20 +135,20 @@ paths:
           content:
             "application/json":
               schema:
-                type: object
-                required:
-                  - user
-                properties:
-                  user:
-                    "$ref": "#/components/schemas/PublicUser"
+                "$ref": "#/components/schemas/UserResponse"
         "400":
           description: Validation failed or malformed JSON body.
           content:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
-              example:
-                error: Invalid registration details
+              examples:
+                invalidDetails:
+                  value:
+                    error: Invalid registration details
+                malformedJson:
+                  value:
+                    error: Bad request
         "409":
           description: "Email or username already exists (MongoDB duplicate key 11000)."
           content:
@@ -199,8 +203,13 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
-              example:
-                error: Invalid email or password
+              examples:
+                invalidCredentials:
+                  value:
+                    error: Invalid email or password
+                malformedJson:
+                  value:
+                    error: Bad request
         "401":
           description: Email not found or password verification failed.
           content:
@@ -245,7 +254,7 @@ paths:
           skipSuccessfulRequests: false
         - limiter: refresh
           windowMs: 900000
-          defaultLimit: "env.refreshRateLimit (default 30; 409 not counted)"
+          defaultLimit: "env.refreshRateLimit (default 30; rate-limiter filter exempts 409 though /refresh emits 200 or 401)"
           skipSuccessfulRequests: true
       responses:
         "200":
@@ -345,12 +354,7 @@ paths:
           content:
             "application/json":
               schema:
-                type: object
-                required:
-                  - user
-                properties:
-                  user:
-                    "$ref": "#/components/schemas/PublicUser"
+                "$ref": "#/components/schemas/UserResponse"
         "401":
           "$ref": "#/components/responses/Unauthorized"
         "429":
@@ -394,6 +398,9 @@ paths:
                 wrongPassword:
                   value:
                     error: Current password is incorrect
+                malformedJson:
+                  value:
+                    error: Bad request
         "401":
           "$ref": "#/components/responses/Unauthorized"
         "413":
@@ -448,7 +455,7 @@ paths:
         - name: exceptCurrent
           in: query
           required: false
-          description: "When strictly `'true'`, preserves the caller's current session (`req.query.exceptCurrent === 'true'`)."
+          description: "When strictly `'true'`, preserves the caller's current session (`req.query.exceptCurrent === 'true'`; other values such as `'false'` or `'1'` evaluate as false and do not return 400)."
           schema:
             type: boolean
       x-rate-limit:
@@ -527,18 +534,17 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
-              example:
-                error: Invalid session name
+              examples:
+                invalidSessionName:
+                  value:
+                    error: Invalid session name
+                malformedJson:
+                  value:
+                    error: Bad request
         "401":
           "$ref": "#/components/responses/Unauthorized"
         "404":
-          description: "Session not found, not owned by caller, or invalid ObjectId."
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/ErrorResponse"
-              example:
-                error: Session not found
+          "$ref": "#/components/responses/SessionNotFound"
         "413":
           "$ref": "#/components/responses/PayloadTooLarge"
         "429":
@@ -571,13 +577,7 @@ paths:
         "401":
           "$ref": "#/components/responses/Unauthorized"
         "404":
-          description: "Session not found, not owned by caller, or invalid ObjectId."
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/ErrorResponse"
-              example:
-                error: Session not found
+          "$ref": "#/components/responses/SessionNotFound"
         "429":
           "$ref": "#/components/responses/TooManyRequests"
         "500":
@@ -655,13 +655,7 @@ paths:
         "401":
           "$ref": "#/components/responses/Unauthorized"
         "403":
-          description: Authenticated user is not a participant in the conversation.
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/ErrorResponse"
-              example:
-                error: Forbidden
+          "$ref": "#/components/responses/ConversationForbidden"
         "429":
           "$ref": "#/components/responses/TooManyRequests"
         "500":
@@ -699,23 +693,13 @@ paths:
           content:
             "application/json":
               schema:
-                type: object
-                required:
-                  - message
-                properties:
-                  message:
-                    "$ref": "#/components/schemas/Message"
+                "$ref": "#/components/schemas/MessageResponse"
         "201":
           description: New message created.
           content:
             "application/json":
               schema:
-                type: object
-                required:
-                  - message
-                properties:
-                  message:
-                    "$ref": "#/components/schemas/Message"
+                "$ref": "#/components/schemas/MessageResponse"
         "400":
           description: "Zod body validation failed (flattened error details), invalid conversation ID, or malformed JSON."
           content:
@@ -736,16 +720,13 @@ paths:
                 invalidConversationId:
                   value:
                     error: Invalid conversation ID
+                malformedJson:
+                  value:
+                    error: Bad request
         "401":
           "$ref": "#/components/responses/Unauthorized"
         "403":
-          description: Authenticated user is not a participant in the conversation.
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/ErrorResponse"
-              example:
-                error: Forbidden
+          "$ref": "#/components/responses/ConversationForbidden"
         "413":
           "$ref": "#/components/responses/PayloadTooLarge"
         "429":
@@ -806,13 +787,7 @@ paths:
         "401":
           "$ref": "#/components/responses/Unauthorized"
         "403":
-          description: Authenticated user is not a participant in the conversation.
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/ErrorResponse"
-              example:
-                error: Forbidden
+          "$ref": "#/components/responses/ConversationForbidden"
         "404":
           description: Message not found in this conversation.
           content:
@@ -886,31 +861,26 @@ paths:
           content:
             "application/json":
               schema:
-                type: object
-                required:
-                  - conversation
-                properties:
-                  conversation:
-                    "$ref": "#/components/schemas/Conversation"
+                "$ref": "#/components/schemas/ConversationResponse"
         "201":
           description: New direct conversation created.
           content:
             "application/json":
               schema:
-                type: object
-                required:
-                  - conversation
-                properties:
-                  conversation:
-                    "$ref": "#/components/schemas/Conversation"
+                "$ref": "#/components/schemas/ConversationResponse"
         "400":
           description: "Invalid body, invalid ObjectId, self-conversation attempt, or malformed JSON."
           content:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
-              example:
-                error: Invalid participant
+              examples:
+                invalidParticipant:
+                  value:
+                    error: Invalid participant
+                malformedJson:
+                  value:
+                    error: Bad request
         "401":
           "$ref": "#/components/responses/Unauthorized"
         "404":
@@ -954,13 +924,7 @@ paths:
         "401":
           "$ref": "#/components/responses/Unauthorized"
         "404":
-          description: "Conversation not found, caller is not a participant, or invalid ObjectId."
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/ErrorResponse"
-              example:
-                error: Conversation not found
+          "$ref": "#/components/responses/ConversationNotFound"
         "429":
           "$ref": "#/components/responses/TooManyRequests"
         "500":
@@ -999,30 +963,24 @@ paths:
           content:
             "application/json":
               schema:
-                type: object
-                required:
-                  - conversation
-                properties:
-                  conversation:
-                    "$ref": "#/components/schemas/Conversation"
+                "$ref": "#/components/schemas/ConversationResponse"
         "400":
           description: Validation failed or malformed JSON.
           content:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
-              example:
-                error: Invalid conversation details
+              examples:
+                invalidDetails:
+                  value:
+                    error: Invalid conversation details
+                malformedJson:
+                  value:
+                    error: Bad request
         "401":
           "$ref": "#/components/responses/Unauthorized"
         "404":
-          description: "Conversation not found, caller is not a participant, or invalid ObjectId."
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/ErrorResponse"
-              example:
-                error: Conversation not found
+          "$ref": "#/components/responses/ConversationNotFound"
         "413":
           "$ref": "#/components/responses/PayloadTooLarge"
         "429":
@@ -1048,7 +1006,7 @@ components:
         type: string
         example: "refreshToken=eyJhbGciOiJIUzI1NiJ9...; Max-Age=1209600; Path=/api/auth; HttpOnly; SameSite=Lax"
     ClearRefreshCookie:
-      description: "Clears the refreshToken cookie (Path=/api/auth, HttpOnly, SameSite=Lax)."
+      description: "Clears the refreshToken cookie (Path=/api/auth, HttpOnly, SameSite=Lax, Secure in production)."
       schema:
         type: string
         example: "refreshToken=; Path=/api/auth; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax"
@@ -1175,9 +1133,11 @@ components:
           description: "Conversation avatar URL (trimmed). Pass null to clear."
       description: "At least one of `name` or `avatarUrl` must be provided in the request body."
       anyOf:
-        - required:
+        - type: object
+          required:
             - name
-        - required:
+        - type: object
+          required:
             - avatarUrl
       x-zod-refine: At least one conversation property is required
     SendMessageRequest:
@@ -1257,6 +1217,13 @@ components:
         avatarUrl:
           type: string
           nullable: true
+    UserResponse:
+      type: object
+      required:
+        - user
+      properties:
+        user:
+          "$ref": "#/components/schemas/PublicUser"
     SanitizedSession:
       type: object
       required:
@@ -1369,6 +1336,8 @@ components:
         - name
         - avatarUrl
         - lastMessageAt
+        - createdAt
+        - updatedAt
       properties:
         _id:
           type: string
@@ -1466,6 +1435,20 @@ components:
           format: date-time
         __v:
           type: integer
+    ConversationResponse:
+      type: object
+      required:
+        - conversation
+      properties:
+        conversation:
+          "$ref": "#/components/schemas/Conversation"
+    MessageResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          "$ref": "#/components/schemas/Message"
   responses:
     Unauthorized:
       description: "Missing, invalid, expired, or revoked Bearer access token."
@@ -1475,6 +1458,30 @@ components:
             "$ref": "#/components/schemas/ErrorResponse"
           example:
             error: Unauthorized
+    ConversationForbidden:
+      description: Authenticated user is not a participant in the conversation.
+      content:
+        "application/json":
+          schema:
+            "$ref": "#/components/schemas/ErrorResponse"
+          example:
+            error: Forbidden
+    SessionNotFound:
+      description: "Session not found, not owned by caller, or invalid ObjectId."
+      content:
+        "application/json":
+          schema:
+            "$ref": "#/components/schemas/ErrorResponse"
+          example:
+            error: Session not found
+    ConversationNotFound:
+      description: "Conversation not found, caller is not a participant, or invalid ObjectId."
+      content:
+        "application/json":
+          schema:
+            "$ref": "#/components/schemas/ErrorResponse"
+          example:
+            error: Conversation not found
     PayloadTooLarge:
       description: "JSON request body exceeded the 16kb limit configured in express.json()."
       content:
