@@ -4,6 +4,9 @@ import { ApiError } from "@/lib/api";
 export const QUERY_KEYS = {
   me: ["me"] as const,
   sessions: ["sessions"] as const,
+  conversations: ["conversations"] as const,
+  messages: (conversationId: string) => ["messages", conversationId] as const,
+  userSearch: (query: string) => ["users", "search", query] as const,
 } as const;
 
 const MAX_TRANSIENT_RETRIES = 2;
