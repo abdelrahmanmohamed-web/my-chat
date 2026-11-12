@@ -1,4 +1,10 @@
-export { AUTH_ENDPOINTS, SESSION_ENDPOINTS } from "./endpoints";
+export {
+  AUTH_ENDPOINTS,
+  CONVERSATION_ENDPOINTS,
+  MESSAGE_ENDPOINTS,
+  SESSION_ENDPOINTS,
+  USER_ENDPOINTS,
+} from "./endpoints";
 export {
   ApiError,
   extractMaxSessionsError,
@@ -19,3 +25,15 @@ export {
   revokeSession,
   updateSessionName,
 } from "./services/auth";
+export {
+  createDirectConversation,
+  hideConversation,
+  listConversations,
+  updateConversation,
+} from "./services/conversations";
+export {
+  listMessages,
+  markMessageReadRest,
+  sendMessageRest,
+} from "./services/messages";
+export { searchUsers } from "./services/users";
