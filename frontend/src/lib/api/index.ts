@@ -18,4 +18,4 @@ export {
   revokeAllSessions,
   revokeSession,
   updateSessionName,
-} from "./sdk/auth";
+} from "./services/auth";

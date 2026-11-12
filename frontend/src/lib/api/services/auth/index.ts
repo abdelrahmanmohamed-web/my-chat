@@ -5,10 +5,10 @@ export {
   logoutUser,
   refreshAccessToken,
   registerUser,
-} from "./auth.sdk";
+} from "./auth.service";
 export {
   listSessions,
   revokeAllSessions,
   revokeSession,
   updateSessionName,
-} from "./sessions.sdk";
+} from "./sessions.service";
