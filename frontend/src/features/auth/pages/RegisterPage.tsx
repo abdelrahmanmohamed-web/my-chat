@@ -77,7 +77,7 @@ export function RegisterPage() {
   return (
     <AuthShell
       title="إنشاء حساب جديد"
-      description="أنشئ حسابك للبدء في مراسلة جهات اتصالك."
+      description="أنشئ حسابك للبدء في مراسلة معارفك."
       footer={
         <>
           لديك حساب بالفعل؟{" "}
