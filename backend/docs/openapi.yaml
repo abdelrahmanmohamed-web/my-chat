@@ -1,0 +1,1506 @@
+openapi: 3.0.3
+info:
+  title: MyChat Backend API
+  version: 0.0.0
+  description: |-
+    REST API specification for the MyChat Express 5 + TypeScript + Zod + MongoDB backend.
+
+    Authentication uses short-lived HS256 JWT access tokens in the `Authorization: Bearer <token>` header
+    paired with an `HttpOnly`, `SameSite=Lax` `refreshToken` cookie scoped to `/api/auth`.
+    All `/api/*` routes are subject to global rate limiting (`draft-8` `RateLimit` / `RateLimit-Policy` headers).
+    Real-time WebSocket events (Socket.io) share the same HTTP server outside REST `paths`.
+servers:
+  - url: "http://localhost:3000"
+    description: "Local development server (default PORT=3000 from src/config/env.ts)"
+tags:
+  - name: Health
+    description: System liveness and database readiness endpoints.
+  - name: Auth
+    description: "Account registration, login, token rotation, logout, profile, and password updates."
+  - name: Sessions
+    description: "Active session inspection, naming, and revocation."
+  - name: Conversations
+    description: "Direct conversation creation, listing, hiding, and metadata updates."
+  - name: Messages
+    description: "Cursor-paginated message history, sending, and read receipts."
+paths:
+  "/api/health":
+    get:
+      tags:
+        - Health
+      operationId: getHealth
+      summary: Liveness check
+      description: "Returns `{ status: \"ok\" }` when the HTTP server is responsive."
+      security: []
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Server is alive.
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - status
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - ok
+              example:
+                status: ok
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+  "/api/ready":
+    get:
+      tags:
+        - Health
+      operationId: getReadiness
+      summary: Readiness check
+      description: "Checks whether Mongoose is connected (`mongoose.connection.readyState === 1`)."
+      security: []
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: MongoDB connection is ready.
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - status
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - ready
+              example:
+                status: ready
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "503":
+          description: MongoDB connection is not ready.
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - status
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - unavailable
+              example:
+                status: unavailable
+  "/api/auth/register":
+    post:
+      tags:
+        - Auth
+      operationId: registerUser
+      summary: Register a new user account
+      description: "Validates registration details with `registerSchema`, hashes the password using Argon2id, creates a User document, and returns the sanitized public user."
+      security: []
+      requestBody:
+        required: true
+        description: New user registration payload.
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/RegisterRequest"
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+        - limiter: register
+          windowMs: 900000
+          defaultLimit: "env.registerRateLimit (default 10)"
+          skipSuccessfulRequests: false
+      responses:
+        "201":
+          description: User account created.
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - user
+                properties:
+                  user:
+                    "$ref": "#/components/schemas/PublicUser"
+        "400":
+          description: Validation failed or malformed JSON body.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Invalid registration details
+        "409":
+          description: "Email or username already exists (MongoDB duplicate key 11000)."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Email or username is already in use
+        "413":
+          "$ref": "#/components/responses/PayloadTooLarge"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/auth/login":
+    post:
+      tags:
+        - Auth
+      operationId: loginUser
+      summary: Authenticate and create a session
+      description: "Authenticates credentials, enforces per-user `maxSessions` (default 3; optional `revokeSessionId` supports `'all'` or a specific session ObjectId), sets the `refreshToken` HttpOnly cookie, and returns a Bearer access token. Automatically infers `device` and session `name` from the `User-Agent` header when omitted."
+      security: []
+      requestBody:
+        required: true
+        description: User credentials and optional session metadata.
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/LoginRequest"
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+        - limiter: login
+          windowMs: 900000
+          defaultLimit: "env.loginRateLimit (default 10)"
+          skipSuccessfulRequests: true
+      responses:
+        "200":
+          description: "Login succeeded; refresh token set in HttpOnly cookie."
+          headers:
+            Set-Cookie:
+              "$ref": "#/components/headers/SetRefreshCookie"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/LoginSuccessResponse"
+        "400":
+          description: "Request body failed `credentialsSchema` validation or malformed JSON."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Invalid email or password
+        "401":
+          description: Email not found or password verification failed.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Invalid email or password
+        "409":
+          description: "Active session limit reached (`MAX_SESSIONS_REACHED`); includes active sessions so the caller can pass `revokeSessionId`."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/MaxSessionsReachedResponse"
+        "413":
+          "$ref": "#/components/responses/PayloadTooLarge"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/auth/refresh":
+    post:
+      tags:
+        - Auth
+      operationId: refreshAccessToken
+      summary: Rotate refresh token and issue a new access token
+      description: "Reads the refresh token from the `refreshToken` HttpOnly cookie (or falls back to `req.body.refreshToken`). Rotates both refresh and access tokens, detects stale token reuse (revoking the entire session), sets the new `refreshToken` cookie on success, and clears the cookie if a presented token fails rotation."
+      security:
+        - refreshCookie: []
+        - {}
+      requestBody:
+        required: false
+        description: "Optional JSON fallback containing `refreshToken` when not sent via HttpOnly cookie."
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/RefreshTokenBodyRequest"
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+        - limiter: refresh
+          windowMs: 900000
+          defaultLimit: "env.refreshRateLimit (default 30; 409 not counted)"
+          skipSuccessfulRequests: true
+      responses:
+        "200":
+          description: "Token rotated; new refreshToken cookie set and new accessToken returned."
+          headers:
+            Set-Cookie:
+              "$ref": "#/components/headers/SetRefreshCookie"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/RefreshSuccessResponse"
+        "400":
+          description: Malformed JSON body.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Bad request
+        "401":
+          description: "Refresh token missing, invalid, expired, or reused. When a token was presented and rejected, `Set-Cookie` clears `refreshToken`."
+          headers:
+            Set-Cookie:
+              "$ref": "#/components/headers/ClearRefreshCookie"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Invalid refresh token
+        "413":
+          "$ref": "#/components/responses/PayloadTooLarge"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/auth/logout":
+    post:
+      tags:
+        - Auth
+      operationId: logoutUser
+      summary: "Revoke the caller's session and clear the refresh cookie"
+      description: "Revokes the session identified by the `refreshToken` cookie, `req.body.refreshToken`, or `Authorization: Bearer <token>` header (in that order), and always clears the `refreshToken` cookie before returning `204`."
+      security:
+        - refreshCookie: []
+        - bearerAuth: []
+        - {}
+      requestBody:
+        required: false
+        description: "Optional JSON fallback containing `refreshToken` when not authenticating via cookie or Bearer header."
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/RefreshTokenBodyRequest"
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "204":
+          description: "Session revoked (if valid token supplied) and refreshToken cookie cleared."
+          headers:
+            Set-Cookie:
+              "$ref": "#/components/headers/ClearRefreshCookie"
+        "400":
+          description: Malformed JSON body.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Bad request
+        "413":
+          "$ref": "#/components/responses/PayloadTooLarge"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/auth/me":
+    get:
+      tags:
+        - Auth
+      operationId: getCurrentUser
+      summary: Get authenticated user profile
+      description: Returns the sanitized public profile of the currently authenticated user.
+      security:
+        - bearerAuth: []
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Authenticated user profile.
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - user
+                properties:
+                  user:
+                    "$ref": "#/components/schemas/PublicUser"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/auth/change-password":
+    post:
+      tags:
+        - Auth
+      operationId: changePassword
+      summary: Change password and revoke other sessions
+      description: "Verifies `currentPassword`, updates the Argon2id password hash, and deletes all active sessions for the user except the caller's current session."
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        description: Current and new passwords.
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/ChangePasswordRequest"
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "204":
+          description: Password updated and all other sessions revoked.
+        "400":
+          description: "Validation failed, current password incorrect, or malformed JSON."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              examples:
+                invalidDetails:
+                  value:
+                    error: Invalid password details
+                wrongPassword:
+                  value:
+                    error: Current password is incorrect
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "413":
+          "$ref": "#/components/responses/PayloadTooLarge"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/sessions":
+    get:
+      tags:
+        - Sessions
+      operationId: listSessions
+      summary: List active sessions
+      description: "Lists all non-expired sessions for the authenticated user, ordered by `createdAt` descending, marking the caller's session with `current: true`."
+      security:
+        - bearerAuth: []
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Active sessions list.
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - sessions
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      "$ref": "#/components/schemas/SanitizedSession"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+    delete:
+      tags:
+        - Sessions
+      operationId: revokeAllSessions
+      summary: Revoke all sessions
+      description: "Deletes all sessions for the authenticated user, optionally keeping the current session when `?exceptCurrent=true`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: exceptCurrent
+          in: query
+          required: false
+          description: "When strictly `'true'`, preserves the caller's current session (`req.query.exceptCurrent === 'true'`)."
+          schema:
+            type: boolean
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Number of revoked sessions.
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - revoked
+                properties:
+                  revoked:
+                    type: integer
+                    minimum: 0
+              example:
+                revoked: 2
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/sessions/{id}":
+    patch:
+      tags:
+        - Sessions
+      operationId: renameSession
+      summary: Rename a session
+      description: "Updates the user-friendly `name` of a session belonging to the authenticated user."
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: "Session identifier (24-character hex MongoDB ObjectId; invalid formats return 404 Session not found)."
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: New session name.
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/UpdateSessionNameRequest"
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Session renamed.
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+              example:
+                success: true
+        "400":
+          description: Invalid session name or malformed JSON.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Invalid session name
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          description: "Session not found, not owned by caller, or invalid ObjectId."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Session not found
+        "413":
+          "$ref": "#/components/responses/PayloadTooLarge"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+    delete:
+      tags:
+        - Sessions
+      operationId: revokeSessionById
+      summary: Revoke a specific session
+      description: Deletes a single session belonging to the authenticated user by ID.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: "Session identifier (24-character hex MongoDB ObjectId; invalid formats return 404 Session not found)."
+          schema:
+            type: string
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "204":
+          description: Session revoked.
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          description: "Session not found, not owned by caller, or invalid ObjectId."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Session not found
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/conversations/{conversationId}/messages":
+    get:
+      tags:
+        - Messages
+      operationId: listMessages
+      summary: List paginated messages in a conversation
+      description: "Retrieves messages in reverse chronological (`_id` descending) order using cursor pagination."
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: "Conversation identifier (24-character hex MongoDB ObjectId; invalid formats return 400 Invalid conversation ID)."
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          required: false
+          description: "Optional message ObjectId cursor (24-character hex string, trimmed; validated via Types.ObjectId.isValid). Returns messages older than this cursor."
+          schema:
+            type: string
+            pattern: "^[0-9a-fA-F]{24}$"
+            x-zod-refine: Types.ObjectId.isValid
+        - name: limit
+          in: query
+          required: false
+          description: "Maximum number of messages to return (integer coerced from query string, 1-100, default 30)."
+          schema:
+            default: 30
+            type: integer
+            minimum: 1
+            maximum: 100
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Paginated messages list.
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - messages
+                  - nextCursor
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      "$ref": "#/components/schemas/Message"
+                  nextCursor:
+                    type: string
+                    pattern: "^[0-9a-fA-F]{24}$"
+                    nullable: true
+        "400":
+          description: Invalid query parameters or invalid conversation ID.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              examples:
+                invalidQuery:
+                  value:
+                    error: Invalid query parameters
+                invalidConversationId:
+                  value:
+                    error: Invalid conversation ID
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          description: Authenticated user is not a participant in the conversation.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Forbidden
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+    post:
+      tags:
+        - Messages
+      operationId: sendMessage
+      summary: Send a message in a conversation
+      description: "Persists a new message (201) or returns an existing message when `clientId` matches an earlier submission by the same sender (200). Unhides the conversation for all participants, updates `lastMessage`/`lastMessageAt`, and broadcasts `message:new` over Socket.io when initialized."
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: "Conversation identifier (24-character hex MongoDB ObjectId; invalid formats return 400 Invalid conversation ID)."
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: Message payload.
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/SendMessageRequest"
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: "Duplicate submission matched by `clientId` (idempotent)."
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - message
+                properties:
+                  message:
+                    "$ref": "#/components/schemas/Message"
+        "201":
+          description: New message created.
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - message
+                properties:
+                  message:
+                    "$ref": "#/components/schemas/Message"
+        "400":
+          description: "Zod body validation failed (flattened error details), invalid conversation ID, or malformed JSON."
+          content:
+            "application/json":
+              schema:
+                anyOf:
+                  - "$ref": "#/components/schemas/ValidationErrorResponse"
+                  - "$ref": "#/components/schemas/ErrorResponse"
+              examples:
+                validationFailed:
+                  value:
+                    error: Validation failed
+                    details:
+                      formErrors: []
+                      fieldErrors:
+                        content:
+                          - Message content cannot be empty
+                invalidConversationId:
+                  value:
+                    error: Invalid conversation ID
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          description: Authenticated user is not a participant in the conversation.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Forbidden
+        "413":
+          "$ref": "#/components/responses/PayloadTooLarge"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/conversations/{conversationId}/messages/{messageId}/read":
+    patch:
+      tags:
+        - Messages
+      operationId: markMessageAsRead
+      summary: Mark a message as read
+      description: "Records a read receipt for the authenticated user on the target message and broadcasts `message:read_update` over Socket.io when initialized."
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: "Conversation identifier (24-character hex MongoDB ObjectId)."
+          schema:
+            type: string
+        - name: messageId
+          in: path
+          required: true
+          description: "Message identifier (24-character hex MongoDB ObjectId)."
+          schema:
+            type: string
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Message marked as read.
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - status
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - ok
+              example:
+                status: ok
+        "400":
+          description: Invalid conversationId or messageId format.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Invalid IDs provided
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          description: Authenticated user is not a participant in the conversation.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Forbidden
+        "404":
+          description: Message not found in this conversation.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Message not found
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/conversations":
+    get:
+      tags:
+        - Conversations
+      operationId: listConversations
+      summary: List visible conversations
+      description: "Returns non-hidden conversations for the authenticated user sorted by `updatedAt` descending, resolving direct conversation `name` dynamically from the counterpart user's `displayName` when no custom name is set."
+      security:
+        - bearerAuth: []
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Visible conversations list.
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - conversations
+                properties:
+                  conversations:
+                    type: array
+                    items:
+                      "$ref": "#/components/schemas/Conversation"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/conversations/direct":
+    post:
+      tags:
+        - Conversations
+      operationId: createOrRestoreDirectConversation
+      summary: Create or restore a direct conversation
+      description: "Creates a 1-on-1 direct conversation with `participantId` (201) or returns/unhides an existing one (200)."
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        description: Target participant identifier.
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/DirectConversationRequest"
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Existing direct conversation returned or restored from hiddenFor.
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - conversation
+                properties:
+                  conversation:
+                    "$ref": "#/components/schemas/Conversation"
+        "201":
+          description: New direct conversation created.
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - conversation
+                properties:
+                  conversation:
+                    "$ref": "#/components/schemas/Conversation"
+        "400":
+          description: "Invalid body, invalid ObjectId, self-conversation attempt, or malformed JSON."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Invalid participant
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          description: Target participant user does not exist.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Participant not found
+        "413":
+          "$ref": "#/components/responses/PayloadTooLarge"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/conversations/{conversationId}/hide":
+    post:
+      tags:
+        - Conversations
+      operationId: hideConversation
+      summary: Hide a conversation for the caller
+      description: "Adds the authenticated user's ID to the conversation's `hiddenFor` set without affecting the other participant."
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: "Conversation identifier (24-character hex MongoDB ObjectId; invalid formats return 404 Conversation not found)."
+          schema:
+            type: string
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "204":
+          description: Conversation hidden for caller.
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          description: "Conversation not found, caller is not a participant, or invalid ObjectId."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Conversation not found
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/conversations/{conversationId}":
+    patch:
+      tags:
+        - Conversations
+      operationId: updateConversation
+      summary: Update conversation metadata
+      description: "Updates `name` and/or `avatarUrl` on a conversation where the caller is a participant. Setting `name` to `null` reverts to the counterpart's `displayName` for direct chats."
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: "Conversation identifier (24-character hex MongoDB ObjectId; invalid formats return 404 Conversation not found)."
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: Metadata fields to update.
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/ConversationUpdateRequest"
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Updated conversation.
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - conversation
+                properties:
+                  conversation:
+                    "$ref": "#/components/schemas/Conversation"
+        "400":
+          description: Validation failed or malformed JSON.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Invalid conversation details
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          description: "Conversation not found, caller is not a participant, or invalid ObjectId."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Conversation not found
+        "413":
+          "$ref": "#/components/responses/PayloadTooLarge"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "HS256 JWT access token issued by POST /api/auth/login or POST /api/auth/refresh. Validated by requireAuth middleware against signature, issuer, audience, and active MongoDB Session.activeAccessTokenId."
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: refreshToken
+      description: "HS256 JWT refresh token stored in an HttpOnly, SameSite=Lax cookie scoped to Path=/api/auth (Secure in production). Set on login/refresh and cleared on logout or failed refresh."
+  headers:
+    SetRefreshCookie:
+      description: "Sets the HttpOnly refreshToken cookie (Path=/api/auth, SameSite=Lax, Max-Age=REFRESH_TTL_SECONDS, Secure in production)."
+      schema:
+        type: string
+        example: "refreshToken=eyJhbGciOiJIUzI1NiJ9...; Max-Age=1209600; Path=/api/auth; HttpOnly; SameSite=Lax"
+    ClearRefreshCookie:
+      description: "Clears the refreshToken cookie (Path=/api/auth, HttpOnly, SameSite=Lax)."
+      schema:
+        type: string
+        example: "refreshToken=; Path=/api/auth; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax"
+    RateLimit:
+      description: IETF draft-8 RateLimit header emitted by express-rate-limit.
+      schema:
+        type: string
+    RateLimitPolicy:
+      description: IETF draft-8 RateLimit-Policy header emitted by express-rate-limit.
+      schema:
+        type: string
+  schemas:
+    RegisterRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 254
+          format: email
+          pattern: "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          description: "User email address (trimmed and stored lowercased)."
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: "^[a-zA-Z0-9_]+$"
+          description: "Unique username containing letters, numbers, and underscores (trimmed; lowercased on persistence)."
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 80
+          description: "Public display name shown in chats (trimmed)."
+        password:
+          type: string
+          minLength: 15
+          maxLength: 128
+          format: password
+          description: "Plaintext password (15-128 characters)."
+      required:
+        - email
+        - username
+        - displayName
+        - password
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 254
+          format: email
+          pattern: "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          description: "Registered email address (trimmed)."
+        password:
+          type: string
+          minLength: 1
+          maxLength: 128
+          format: password
+          description: Account password.
+        device:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: "Optional client device label (trimmed). Defaults to value inferred from User-Agent header."
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: "Optional friendly session name (trimmed). Defaults to value inferred from User-Agent header."
+        revokeSessionId:
+          type: string
+          description: "Optional session revocation target when resolving max-session limits: 'all' revokes all active sessions; a 24-character hex ObjectId revokes that specific session; other values are ignored."
+      required:
+        - email
+        - password
+    ChangePasswordRequest:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+          minLength: 1
+          maxLength: 128
+          format: password
+          description: "User's existing password."
+        newPassword:
+          type: string
+          minLength: 15
+          maxLength: 128
+          format: password
+          description: "Replacement password (15-128 characters)."
+      required:
+        - currentPassword
+        - newPassword
+    UpdateSessionNameRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: "New user-friendly session label (trimmed)."
+      required:
+        - name
+    DirectConversationRequest:
+      type: object
+      properties:
+        participantId:
+          type: string
+          minLength: 1
+          description: "Target user's MongoDB ObjectId (24-character hex string, trimmed). Must refer to an existing user other than the caller."
+      required:
+        - participantId
+    ConversationUpdateRequest:
+      type: object
+      properties:
+        name:
+          nullable: true
+          type: string
+          maxLength: 120
+          description: "Custom conversation display name (trimmed). Pass null to clear the custom name and restore the counterpart's displayName."
+        avatarUrl:
+          nullable: true
+          type: string
+          maxLength: 2048
+          description: "Conversation avatar URL (trimmed). Pass null to clear."
+      description: "At least one of `name` or `avatarUrl` must be provided in the request body."
+      anyOf:
+        - required:
+            - name
+        - required:
+            - avatarUrl
+      x-zod-refine: At least one conversation property is required
+    SendMessageRequest:
+      type: object
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: "Message text content (trimmed, 1-4000 characters)."
+        clientId:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: "Optional client-generated idempotency key (trimmed, 1-100 characters). Reusing the same clientId for the same sender returns the existing message with HTTP 200."
+      required:
+        - content
+    RefreshTokenBodyRequest:
+      type: object
+      description: "Optional fallback payload when the refreshToken HttpOnly cookie is not sent (cookie takes precedence)."
+      properties:
+        refreshToken:
+          type: string
+          description: Raw JWT refresh token string.
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Human-readable error summary or machine error code.
+    ValidationErrorResponse:
+      type: object
+      required:
+        - error
+        - details
+      properties:
+        error:
+          type: string
+          example: Validation failed
+        details:
+          type: object
+          required:
+            - formErrors
+            - fieldErrors
+          properties:
+            formErrors:
+              type: array
+              items:
+                type: string
+            fieldErrors:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+    PublicUser:
+      type: object
+      required:
+        - id
+        - email
+        - username
+        - displayName
+      description: "Sanitized public user representation returned by toPublicUser (excludes passwordHash and internal fields)."
+      properties:
+        id:
+          type: string
+          pattern: "^[0-9a-fA-F]{24}$"
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+    SanitizedSession:
+      type: object
+      required:
+        - id
+        - name
+        - device
+        - ip
+        - userAgent
+        - createdAt
+        - lastActiveAt
+        - current
+      description: "Sanitized session view (excludes refreshTokenHash and activeAccessTokenId)."
+      properties:
+        id:
+          type: string
+          pattern: "^[0-9a-fA-F]{24}$"
+        name:
+          type: string
+        device:
+          type: string
+        ip:
+          type: string
+        userAgent:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastActiveAt:
+          type: string
+          format: date-time
+        current:
+          type: boolean
+    LoginSuccessResponse:
+      type: object
+      required:
+        - accessToken
+        - tokenType
+        - expiresIn
+        - user
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          enum:
+            - Bearer
+          example: Bearer
+        expiresIn:
+          type: integer
+          description: "Access token lifetime in seconds (default 840)."
+          example: 840
+        user:
+          "$ref": "#/components/schemas/PublicUser"
+    RefreshSuccessResponse:
+      type: object
+      required:
+        - accessToken
+        - tokenType
+        - expiresIn
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          enum:
+            - Bearer
+          example: Bearer
+        expiresIn:
+          type: integer
+          description: "Access token lifetime in seconds (default 840)."
+          example: 840
+    MaxSessionsReachedResponse:
+      type: object
+      required:
+        - error
+        - message
+        - sessions
+      properties:
+        error:
+          type: string
+          enum:
+            - MAX_SESSIONS_REACHED
+          example: MAX_SESSIONS_REACHED
+        message:
+          type: string
+          example: Maximum active sessions reached. Please select a session to terminate.
+        sessions:
+          type: array
+          items:
+            "$ref": "#/components/schemas/SanitizedSession"
+    ConversationLastMessage:
+      type: object
+      properties:
+        messageId:
+          type: string
+          pattern: "^[0-9a-fA-F]{24}$"
+        senderId:
+          type: string
+          pattern: "^[0-9a-fA-F]{24}$"
+        content:
+          type: string
+          maxLength: 200
+    Conversation:
+      type: object
+      required:
+        - _id
+        - type
+        - participantIds
+        - hiddenFor
+        - name
+        - avatarUrl
+        - lastMessageAt
+      properties:
+        _id:
+          type: string
+          pattern: "^[0-9a-fA-F]{24}$"
+        type:
+          type: string
+          enum:
+            - direct
+        directKey:
+          type: string
+          description: "Sorted pair key '<minObjectId>:<maxObjectId>' present on direct conversations."
+        participantIds:
+          type: array
+          items:
+            type: string
+            pattern: "^[0-9a-fA-F]{24}$"
+        hiddenFor:
+          type: array
+          items:
+            type: string
+            pattern: "^[0-9a-fA-F]{24}$"
+        name:
+          type: string
+          nullable: true
+          description: "Custom conversation name, or dynamically resolved counterpart displayName for direct conversations when unset."
+        avatarUrl:
+          type: string
+          nullable: true
+        lastMessageAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastMessage:
+          "$ref": "#/components/schemas/ConversationLastMessage"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        __v:
+          type: integer
+    MessageRead:
+      type: object
+      properties:
+        _id:
+          type: string
+          pattern: "^[0-9a-fA-F]{24}$"
+        userId:
+          type: string
+          pattern: "^[0-9a-fA-F]{24}$"
+        lastReadMessageId:
+          type: string
+          pattern: "^[0-9a-fA-F]{24}$"
+    Message:
+      type: object
+      required:
+        - _id
+        - conversationId
+        - senderId
+        - content
+        - clientId
+        - reads
+        - expiresAt
+        - createdAt
+        - updatedAt
+      properties:
+        _id:
+          type: string
+          pattern: "^[0-9a-fA-F]{24}$"
+        conversationId:
+          type: string
+          pattern: "^[0-9a-fA-F]{24}$"
+        senderId:
+          type: string
+          pattern: "^[0-9a-fA-F]{24}$"
+        content:
+          type: string
+        clientId:
+          type: string
+          nullable: true
+        reads:
+          type: array
+          items:
+            "$ref": "#/components/schemas/MessageRead"
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        __v:
+          type: integer
+  responses:
+    Unauthorized:
+      description: "Missing, invalid, expired, or revoked Bearer access token."
+      content:
+        "application/json":
+          schema:
+            "$ref": "#/components/schemas/ErrorResponse"
+          example:
+            error: Unauthorized
+    PayloadTooLarge:
+      description: "JSON request body exceeded the 16kb limit configured in express.json()."
+      content:
+        "application/json":
+          schema:
+            "$ref": "#/components/schemas/ErrorResponse"
+          example:
+            error: Payload too large
+    TooManyRequests:
+      description: "Rate limit exceeded (global or endpoint-specific limiter)."
+      headers:
+        RateLimit:
+          "$ref": "#/components/headers/RateLimit"
+        RateLimit-Policy:
+          "$ref": "#/components/headers/RateLimitPolicy"
+      content:
+        "application/json":
+          schema:
+            "$ref": "#/components/schemas/ErrorResponse"
+          example:
+            error: "Too many requests, please try again later"
+    InternalServerError:
+      description: Unexpected server error handled by createErrorHandler.
+      content:
+        "application/json":
+          schema:
+            "$ref": "#/components/schemas/ErrorResponse"
+          example:
+            error: Internal server error

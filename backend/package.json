@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:smoke": "node --env-file=.env.test --test tests/smoke.test.ts"
+    "test:smoke": "node --env-file=.env.test --test tests/smoke.test.ts",
+    "generate:openapi": "tsx scripts/generate-openapi.ts"
   },
   "dependencies": {
     "argon2": "^0.45.1",
@@ -25,6 +26,7 @@
     "pino": "^10.4.0",
     "pino-http": "^11.0.0",
     "socket.io": "^4.8.4",
+    "swagger-ui-express": "^5.0.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -33,9 +35,11 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^24.19.2",
+    "@types/swagger-ui-express": "^4.1.8",
     "eslint": "^10.14.0",
     "pino-pretty": "^13.2.0",
     "socket.io-client": "^4.8.4",
+    "swagger-autogen": "^2.23.7",
     "tsx": "^4.23.15",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.72.1",

@@ -29,6 +29,7 @@
     "lint": "npm run lint --workspaces --if-present",
     "format": "prettier --write .",
     "check": "npm run lint && npm run build",
+    "sync:api": "npm --workspace=@my-app/backend run generate:openapi && npm --workspace=@my-app/frontend run gen:api",
     "prepare": "husky"
   },
   "devDependencies": {
