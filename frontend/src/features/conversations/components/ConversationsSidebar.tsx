@@ -20,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLogoutMutation } from "@/features/auth";
+import { ConnectionStatusIndicator } from "@/features/connection";
 import { toApiError } from "@/lib/api";
 import { useAuthStore } from "@/stores";
 import type { Conversation } from "@/types/conversations";
@@ -100,6 +101,7 @@ export function ConversationsSidebar({
         </div>
 
         <div className="flex items-center gap-1">
+          <ConnectionStatusIndicator />
           <Button
             type="button"
             variant="ghost"

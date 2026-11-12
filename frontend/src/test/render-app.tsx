@@ -3,8 +3,15 @@ import { createMemoryRouter, RouterProvider } from "react-router";
 import { VirtuosoMockContext } from "react-virtuoso";
 import { AppProviders } from "@/app/providers";
 import { appRoutes } from "@/app/router";
+import type { RealtimeSocket } from "@/lib/socket";
+import { createFakeRealtimeSocket } from "./fake-socket";
 
-export function renderAppAt(initialRoute = "/") {
+interface RenderAppOptions {
+  socketInstance?: RealtimeSocket;
+}
+
+export function renderAppAt(initialRoute = "/", options?: RenderAppOptions) {
+  const socketInstance = options?.socketInstance ?? createFakeRealtimeSocket();
   const router = createMemoryRouter(appRoutes, {
     initialEntries: [initialRoute],
   });
@@ -13,7 +20,7 @@ export function renderAppAt(initialRoute = "/") {
     <VirtuosoMockContext.Provider
       value={{ viewportHeight: 600, itemHeight: 80 }}
     >
-      <AppProviders>
+      <AppProviders socketInstance={socketInstance}>
         <RouterProvider router={router} />
       </AppProviders>
     </VirtuosoMockContext.Provider>,
@@ -21,6 +28,7 @@ export function renderAppAt(initialRoute = "/") {
 
   return {
     router,
+    socketInstance,
     ...view,
   };
 }

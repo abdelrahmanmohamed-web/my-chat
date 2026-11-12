@@ -2,7 +2,8 @@ import { useEffect, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Spinner } from "@/components/ui/spinner";
 import { getCurrentUser, onAuthFailure, refreshSession } from "@/lib/api";
-import { useAuthStore } from "@/stores";
+import { socket } from "@/lib/socket";
+import { useAuthStore, useConnectionStore } from "@/stores";
 import { QUERY_KEYS } from "./query-client";
 
 let restoreInFlight: Promise<void> | null = null;
@@ -46,6 +47,8 @@ export function SessionBootstrap({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthFailure(() => {
+      socket.disconnect();
+      useConnectionStore.getState().resetConnection();
       queryClient.clear();
     });
 

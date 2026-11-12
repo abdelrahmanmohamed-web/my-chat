@@ -20,6 +20,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import {
+  ConnectionStatusIndicator,
+  useConversationRoom,
+} from "@/features/connection";
+import {
   ConversationAvatar,
   EditConversationDialog,
   useConversationsQuery,
@@ -81,6 +85,8 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
   const navigate = useNavigate();
   const currentUserId = useAuthStore((state) => state.user?.id ?? "");
   const [isEditOpen, setIsEditOpen] = useState(false);
+
+  useConversationRoom(conversationId);
 
   const conversationsQuery = useConversationsQuery();
   const conversation = useMemo(
@@ -241,32 +247,36 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
           </div>
         </div>
 
-        {conversation && (
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="إعدادات المحادثة"
-                />
-              }
-            >
-              <MoreVerticalIcon aria-hidden="true" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onClick={() => setIsEditOpen(true)}>
-                <PencilIcon aria-hidden="true" />
-                <span>تعديل الاسم</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" onClick={handleHide}>
-                <EyeOffIcon aria-hidden="true" />
-                <span>إخفاء المحادثة</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        <div className="flex items-center gap-1.5">
+          <ConnectionStatusIndicator compact className="md:hidden" />
+
+          {conversation && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="إعدادات المحادثة"
+                  />
+                }
+              >
+                <MoreVerticalIcon aria-hidden="true" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem onClick={() => setIsEditOpen(true)}>
+                  <PencilIcon aria-hidden="true" />
+                  <span>تعديل الاسم</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem variant="destructive" onClick={handleHide}>
+                  <EyeOffIcon aria-hidden="true" />
+                  <span>إخفاء المحادثة</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </header>
 
       <div className="relative flex min-h-0 flex-1 flex-col chat-wallpaper">

@@ -2,7 +2,8 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
 import { queryClient } from "@/app/query-client";
-import { useAuthStore } from "@/stores";
+import { socket } from "@/lib/socket";
+import { useAuthStore, useConnectionStore } from "@/stores";
 import { mswServer } from "./msw/server";
 
 if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
@@ -28,7 +29,9 @@ beforeAll(() => {
 afterEach(() => {
   mswServer.resetHandlers();
   cleanup();
+  socket.disconnect();
   queryClient.clear();
+  useConnectionStore.getState().resetConnection();
   useAuthStore.setState({
     accessToken: null,
     user: null,
