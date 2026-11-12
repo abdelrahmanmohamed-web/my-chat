@@ -1,12 +1,8 @@
 import { createElement } from "react";
 import { createBrowserRouter, Navigate, type RouteObject } from "react-router";
+import { LoginPage, RegisterPage, SecuritySettingsPage } from "@/features/auth";
 import { ProtectedRoute, PublicOnlyRoute } from "./route-guards";
-import {
-  HomeRoutePlaceholder,
-  LoginRoutePlaceholder,
-  RegisterRoutePlaceholder,
-  SecuritySettingsPlaceholder,
-} from "./route-placeholders";
+import { HomeRoutePlaceholder } from "./route-placeholders";
 import { ROUTES } from "./routes";
 
 export const appRoutes: RouteObject[] = [
@@ -15,11 +11,11 @@ export const appRoutes: RouteObject[] = [
     children: [
       {
         path: ROUTES.login,
-        element: createElement(LoginRoutePlaceholder),
+        element: createElement(LoginPage),
       },
       {
         path: ROUTES.register,
-        element: createElement(RegisterRoutePlaceholder),
+        element: createElement(RegisterPage),
       },
     ],
   },
@@ -32,7 +28,7 @@ export const appRoutes: RouteObject[] = [
       },
       {
         path: ROUTES.settingsSecurity,
-        element: createElement(SecuritySettingsPlaceholder),
+        element: createElement(SecuritySettingsPage),
       },
     ],
   },
