@@ -14,7 +14,8 @@ describe("Phase 1 auth flows", () => {
   it("restores session on initial load when refresh succeeds", async () => {
     const { router } = renderAppAt("/");
 
-    expect(await screen.findByText("مرحباً، أحمد محمد")).toBeInTheDocument();
+    expect(await screen.findByText("اختر محادثة للبدء")).toBeInTheDocument();
+    expect(screen.getByText("أحمد محمد")).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/");
     expect(useAuthStore.getState().status).toBe("authenticated");
   });
@@ -159,7 +160,8 @@ describe("Phase 1 auth flows", () => {
     });
     fireEvent.click(revokeButtons[0]);
 
-    expect(await screen.findByText("مرحباً، أحمد محمد")).toBeInTheDocument();
+    expect(await screen.findByText("اختر محادثة للبدء")).toBeInTheDocument();
+    expect(screen.getByText("أحمد محمد")).toBeInTheDocument();
     expect(sentPayloads).toEqual([
       { email: "ahmed@example.com", password: "123456" },
       {

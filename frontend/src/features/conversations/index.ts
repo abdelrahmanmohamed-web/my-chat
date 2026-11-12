@@ -1,3 +1,8 @@
+export { ConversationAvatar } from "./components/ConversationAvatar";
+export { ConversationListItem } from "./components/ConversationListItem";
+export { ConversationsSidebar } from "./components/ConversationsSidebar";
+export { EditConversationDialog } from "./components/EditConversationDialog";
+export { NewConversationDialog } from "./components/NewConversationDialog";
 export {
   removeConversationFromCache,
   sortConversationsByActivity,

@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import { createBrowserRouter, Navigate, type RouteObject } from "react-router";
 import { LoginPage, RegisterPage, SecuritySettingsPage } from "@/features/auth";
+import { ChatWorkspacePage } from "@/features/chat";
 import { ProtectedRoute, PublicOnlyRoute } from "./route-guards";
-import { HomeRoutePlaceholder } from "./route-placeholders";
 import { ROUTES } from "./routes";
 
 export const appRoutes: RouteObject[] = [
@@ -24,7 +24,11 @@ export const appRoutes: RouteObject[] = [
     children: [
       {
         path: ROUTES.home,
-        element: createElement(HomeRoutePlaceholder),
+        element: createElement(ChatWorkspacePage),
+      },
+      {
+        path: ROUTES.chat,
+        element: createElement(ChatWorkspacePage),
       },
       {
         path: ROUTES.settingsSecurity,

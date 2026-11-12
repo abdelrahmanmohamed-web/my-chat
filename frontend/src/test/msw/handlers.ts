@@ -55,4 +55,23 @@ export const authHandlers = [
   http.delete("*/api/sessions", () => {
     return HttpResponse.json({ revoked: 1 });
   }),
+
+  http.get("*/api/users/search", () => {
+    return HttpResponse.json({ users: [] });
+  }),
+
+  http.get("*/api/conversations", () => {
+    return HttpResponse.json({ conversations: [] });
+  }),
+
+  http.get("*/api/conversations/:conversationId/messages", () => {
+    return HttpResponse.json({ messages: [], nextCursor: null });
+  }),
+
+  http.patch(
+    "*/api/conversations/:conversationId/messages/:messageId/read",
+    () => {
+      return HttpResponse.json({ status: "ok" });
+    },
+  ),
 ];

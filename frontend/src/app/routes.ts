@@ -1,9 +1,14 @@
 export const ROUTES = {
   home: "/",
+  chat: "/conversations/:conversationId",
   login: "/login",
   register: "/register",
   settingsSecurity: "/settings/security",
 } as const;
+
+export function conversationPath(conversationId: string): string {
+  return `/conversations/${encodeURIComponent(conversationId)}`;
+}
 
 const AUTH_PUBLIC_ROUTES: ReadonlyArray<string> = [
   ROUTES.login,
