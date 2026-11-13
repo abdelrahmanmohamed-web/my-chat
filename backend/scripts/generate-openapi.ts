@@ -29,6 +29,7 @@ import {
 import {
   conversationUpdateSchema,
   directConversationSchema,
+  userSearchQuerySchema,
 } from "../src/modules/conversations/conversation.schemas.ts";
 import {
   listMessagesQuerySchema,
@@ -527,6 +528,28 @@ function buildReusableComponents(): JsonObject {
         required: ["user"],
         properties: {
           user: { $ref: "#/components/schemas/PublicUser" },
+        },
+      },
+
+      UserSearchResult: {
+        type: "object",
+        required: [
+          "id",
+          "email",
+          "username",
+          "displayName",
+          "avatarUrl",
+          "status",
+        ],
+        description:
+          "Sanitized user search result returned by GET /api/users/search.",
+        properties: {
+          id: { type: "string", pattern: OBJECT_ID_PATTERN },
+          email: { type: "string", format: "email" },
+          username: { type: "string" },
+          displayName: { type: "string" },
+          avatarUrl: { type: "string", nullable: true },
+          status: { type: "string", enum: ["online", "offline"] },
         },
       },
 
@@ -1277,6 +1300,50 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     },
   },
 
+  "GET /api/users/search": {
+    operationId: "searchUsers",
+    tags: ["Users"],
+    summary: "Search users by username or email",
+    description:
+      "Searches registered users by case-insensitive substring match against `username` or `email`, excluding the authenticated caller and sensitive fields.",
+    queryZodSchema: userSearchQuerySchema,
+    queryParameterOverrides: {
+      q: {
+        description:
+          "Search term matched case-insensitively against username or email (trimmed, 1-100 characters).",
+      },
+      limit: {
+        description:
+          "Maximum number of matching users to return (integer coerced from query string, 1-50, default 20).",
+      },
+    },
+    responses: {
+      "200": {
+        description: "Matching users list.",
+        content: jsonInline({
+          type: "object",
+          required: ["users"],
+          properties: {
+            users: {
+              type: "array",
+              items: { $ref: "#/components/schemas/UserSearchResult" },
+            },
+          },
+        }),
+      },
+      "400": {
+        description: "Missing or invalid query parameters.",
+        content: jsonInline(
+          { $ref: "#/components/schemas/ErrorResponse" },
+          { error: "Invalid query parameters" },
+        ),
+      },
+      "401": { $ref: "#/components/responses/Unauthorized" },
+      "429": { $ref: "#/components/responses/TooManyRequests" },
+      "500": { $ref: "#/components/responses/InternalServerError" },
+    },
+  },
+
   "GET /api/conversations": {
     operationId: "listConversations",
     tags: ["Conversations"],
@@ -1303,12 +1370,12 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     },
   },
 
-  "POST /api/conversations/direct": {
+  "POST /api/conversations": {
     operationId: "createOrRestoreDirectConversation",
     tags: ["Conversations"],
     summary: "Create or restore a direct conversation",
     description:
-      "Creates a 1-on-1 direct conversation with `participantId` (201) or returns/unhides an existing one (200).",
+      "Creates a 1-on-1 direct conversation with `participantId` in the request body (201) or returns/unhides an existing one (200).",
     requestBody: {
       required: true,
       description: "Target participant identifier.",
@@ -1789,6 +1856,10 @@ function buildOpenApiDocument(discoveredRoutes: DiscoveredRoute[]): JsonObject {
       {
         name: "Sessions",
         description: "Active session inspection, naming, and revocation.",
+      },
+      {
+        name: "Users",
+        description: "User discovery and search for starting conversations.",
       },
       {
         name: "Conversations",

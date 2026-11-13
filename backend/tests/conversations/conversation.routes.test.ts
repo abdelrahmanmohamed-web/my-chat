@@ -72,6 +72,83 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
     userC = { id: uC._id.toString(), token: sC.accessToken };
   });
 
+  describe("GET /api/users/search", () => {
+    it("should return 401 Unauthorized if no auth token is provided", async () => {
+      const res = await fetch(`${baseUrl}/api/users/search?q=route`);
+      expect(res.status).toBe(401);
+    });
+
+    it("should return 400 Bad Request when query parameter q is missing or empty", async () => {
+      const missingRes = await fetch(`${baseUrl}/api/users/search`, {
+        headers: { Authorization: `Bearer ${userA.token}` },
+      });
+      expect(missingRes.status).toBe(400);
+
+      const emptyRes = await fetch(`${baseUrl}/api/users/search?q=%20%20`, {
+        headers: { Authorization: `Bearer ${userA.token}` },
+      });
+      expect(emptyRes.status).toBe(400);
+    });
+
+    it("should search by username or email, return id and public data, and exclude caller", async () => {
+      await User.create({
+        email: "ali.dev@example.com",
+        username: "ali_chat",
+        displayName: "Ali Chat",
+        avatarUrl: "https://example.com/ali-avatar.png",
+        status: "online",
+        passwordHash: "dummy-hash",
+      });
+
+      const usernameRes = await fetch(`${baseUrl}/api/users/search?q=ali`, {
+        headers: { Authorization: `Bearer ${userA.token}` },
+      });
+      expect(usernameRes.status).toBe(200);
+      const usernameBody = (await usernameRes.json()) as {
+        users: Array<{
+          id: string;
+          email: string;
+          username: string;
+          displayName: string;
+          avatarUrl: string | null;
+          status: string;
+        }>;
+      };
+      expect(usernameBody.users).toHaveLength(1);
+      expect(usernameBody.users[0]).toMatchObject({
+        email: "ali.dev@example.com",
+        username: "ali_chat",
+        displayName: "Ali Chat",
+        avatarUrl: "https://example.com/ali-avatar.png",
+        status: "online",
+      });
+      expect(usernameBody.users[0].id).toBeDefined();
+
+      // Search by email and ensure caller (userA) is excluded from shared domain results
+      const emailRes = await fetch(
+        `${baseUrl}/api/users/search?q=route_b@example.com`,
+        {
+          headers: { Authorization: `Bearer ${userA.token}` },
+        },
+      );
+      expect(emailRes.status).toBe(200);
+      const emailBody = (await emailRes.json()) as {
+        users: Array<{ id: string; username: string }>;
+      };
+      expect(emailBody.users).toHaveLength(1);
+      expect(emailBody.users[0].id).toBe(userB.id);
+      expect(emailBody.users[0].username).toBe("route_b");
+
+      // Searching for self returns empty
+      const selfRes = await fetch(`${baseUrl}/api/users/search?q=route_a`, {
+        headers: { Authorization: `Bearer ${userA.token}` },
+      });
+      expect(selfRes.status).toBe(200);
+      const selfBody = (await selfRes.json()) as { users: unknown[] };
+      expect(selfBody.users).toEqual([]);
+    });
+  });
+
   describe("GET /api/conversations", () => {
     it("should return 401 Unauthorized if no auth token is provided", async () => {
       const res = await fetch(`${baseUrl}/api/conversations`);
@@ -89,9 +166,9 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
     });
   });
 
-  describe("POST /api/conversations/direct", () => {
+  describe("POST /api/conversations", () => {
     it("should return 401 Unauthorized if no auth token is provided", async () => {
-      const res = await fetch(`${baseUrl}/api/conversations/direct`, {
+      const res = await fetch(`${baseUrl}/api/conversations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ participantId: userB.id }),
@@ -100,7 +177,7 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
     });
 
     it("should return 400 Bad Request for invalid body or missing participantId", async () => {
-      const res = await fetch(`${baseUrl}/api/conversations/direct`, {
+      const res = await fetch(`${baseUrl}/api/conversations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -115,7 +192,7 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
     });
 
     it("should return 400 Bad Request if trying to start direct conversation with oneself", async () => {
-      const res = await fetch(`${baseUrl}/api/conversations/direct`, {
+      const res = await fetch(`${baseUrl}/api/conversations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -131,7 +208,7 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
 
     it("should return 404 Not Found if target participant does not exist", async () => {
       const nonExistentId = "507f1f77bcf86cd799439099";
-      const res = await fetch(`${baseUrl}/api/conversations/direct`, {
+      const res = await fetch(`${baseUrl}/api/conversations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -145,14 +222,24 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
       expect(body.error).toBe("Participant not found");
     });
 
-    it("should return 201 Created when creating a new direct conversation", async () => {
-      const res = await fetch(`${baseUrl}/api/conversations/direct`, {
+    it("should return 201 Created when creating a new direct conversation from searched user", async () => {
+      const searchRes = await fetch(`${baseUrl}/api/users/search?q=route_b`, {
+        headers: { Authorization: `Bearer ${userA.token}` },
+      });
+      expect(searchRes.status).toBe(200);
+      const searchBody = (await searchRes.json()) as {
+        users: Array<{ id: string }>;
+      };
+      expect(searchBody.users).toHaveLength(1);
+      const pickedParticipantId = searchBody.users[0].id;
+
+      const res = await fetch(`${baseUrl}/api/conversations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${userA.token}`,
         },
-        body: JSON.stringify({ participantId: userB.id }),
+        body: JSON.stringify({ participantId: pickedParticipantId }),
       });
 
       expect(res.status).toBe(201);
@@ -162,7 +249,7 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
       expect(body.conversation._id).toBeDefined();
       expect(body.conversation.type).toBe("direct");
       expect(body.conversation.participantIds).toContain(userA.id);
-      expect(body.conversation.participantIds).toContain(userB.id);
+      expect(body.conversation.participantIds).toContain(pickedParticipantId);
       expect(body.conversation.name).toBe("Route User B");
 
       // Verify listing returns this conversation
@@ -179,7 +266,7 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
 
     it("should return 200 OK when conversation already exists (idempotent / restored)", async () => {
       // First call -> 201
-      const firstRes = await fetch(`${baseUrl}/api/conversations/direct`, {
+      const firstRes = await fetch(`${baseUrl}/api/conversations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -194,7 +281,7 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
       expect(firstBody.conversation.name).toBe("Route User B");
 
       // Second call from User B to User A -> 200
-      const secondRes = await fetch(`${baseUrl}/api/conversations/direct`, {
+      const secondRes = await fetch(`${baseUrl}/api/conversations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -222,7 +309,7 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
 
     it("should return 404 if conversation does not exist or caller is not a participant", async () => {
       // Create conversation between A and B
-      const createRes = await fetch(`${baseUrl}/api/conversations/direct`, {
+      const createRes = await fetch(`${baseUrl}/api/conversations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -242,7 +329,7 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
 
     it("should hide conversation with 204 and remove it from caller's conversation list", async () => {
       // Create conversation between A and B
-      const createRes = await fetch(`${baseUrl}/api/conversations/direct`, {
+      const createRes = await fetch(`${baseUrl}/api/conversations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -301,7 +388,7 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
     });
 
     it("should return 404 if caller is not a participant", async () => {
-      const createRes = await fetch(`${baseUrl}/api/conversations/direct`, {
+      const createRes = await fetch(`${baseUrl}/api/conversations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -325,7 +412,7 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
     });
 
     it("should return 200 with updated conversation when valid", async () => {
-      const createRes = await fetch(`${baseUrl}/api/conversations/direct`, {
+      const createRes = await fetch(`${baseUrl}/api/conversations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

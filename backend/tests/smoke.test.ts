@@ -453,7 +453,7 @@ test("MongoDB Session & Token Architecture Smoke Tests", async (t) => {
     assert.equal(regB.status, 201);
     const userB = ((await regB.json()) as { user: { id: string } }).user;
 
-    const createConv = await fetch(`${baseUrl}/api/conversations/direct`, {
+    const createConv = await fetch(`${baseUrl}/api/conversations`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

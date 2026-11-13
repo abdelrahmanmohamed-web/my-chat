@@ -5,6 +5,7 @@ import {
   createOrRestoreDirectConversation,
   listVisibleConversations,
   hideConversation,
+  searchUsers,
   updateConversation,
 } from "../../src/modules/conversations/conversation.service.ts";
 import { Conversation } from "../../src/modules/conversations/conversation.model.ts";
@@ -353,6 +354,63 @@ describe("Conversation Service (conversation.service.ts)", () => {
       // Verify in DB: stored as null
       const inDb = await Conversation.findById(convId);
       expect(inDb?.name).toBeNull();
+    });
+  });
+
+  describe("searchUsers", () => {
+    it("should search users by username or email, exclude caller, and omit sensitive fields", async () => {
+      const aliUser = await User.create({
+        email: "ali.mohamed@example.com",
+        username: "ali_dev",
+        displayName: "Ali Mohamed",
+        avatarUrl: "https://example.com/ali.png",
+        status: "online",
+        passwordHash: "secret-hash",
+        maxSessions: 5,
+      });
+
+      // Search by username fragment (case-insensitive)
+      const byUsername = await searchUsers(userAId, { q: "ALI", limit: 20 });
+      expect(byUsername).toHaveLength(1);
+      expect(byUsername[0]).toEqual({
+        id: aliUser._id.toString(),
+        email: "ali.mohamed@example.com",
+        username: "ali_dev",
+        displayName: "Ali Mohamed",
+        avatarUrl: "https://example.com/ali.png",
+        status: "online",
+      });
+      expect("passwordHash" in byUsername[0]).toBe(false);
+      expect("maxSessions" in byUsername[0]).toBe(false);
+
+      // Search by email fragment
+      const byEmail = await searchUsers(userAId, { q: "userb@", limit: 20 });
+      expect(byEmail).toHaveLength(1);
+      expect(byEmail[0].id).toBe(userBId);
+      expect(byEmail[0].username).toBe("user_b");
+
+      // Should exclude the requesting user even if query matches them
+      const excludeSelf = await searchUsers(userAId, { q: "user_a", limit: 20 });
+      expect(excludeSelf).toHaveLength(0);
+    });
+
+    it("should safely escape regex special characters and respect limit", async () => {
+      await User.create({
+        email: "ali+work@example.com",
+        username: "ali_work",
+        displayName: "Ali Work",
+        passwordHash: "dummy-hash",
+      });
+
+      const specialMatch = await searchUsers(userAId, { q: "ali+work@", limit: 20 });
+      expect(specialMatch).toHaveLength(1);
+      expect(specialMatch[0].email).toBe("ali+work@example.com");
+
+      const regexCharsNoMatch = await searchUsers(userAId, { q: "[a-z]+", limit: 20 });
+      expect(regexCharsNoMatch).toEqual([]);
+
+      const limited = await searchUsers(userAId, { q: "user_", limit: 1 });
+      expect(limited).toHaveLength(1);
     });
   });
 });

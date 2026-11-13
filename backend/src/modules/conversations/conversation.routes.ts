@@ -2,9 +2,10 @@
  * ============================================================================
  * Conversation HTTP Routes
  * ============================================================================
- * Exposes endpoints for managing conversations:
+ * Exposes endpoints for managing conversations and discovering participants:
+ * - GET    /api/users/search                 : Searches users by username or email.
  * - GET    /api/conversations                : Lists visible conversations for user.
- * - POST   /api/conversations/direct         : Creates or restores a direct chat.
+ * - POST   /api/conversations                : Creates or restores a direct chat.
  * - POST   /api/conversations/:id/hide       : Hides a conversation for caller.
  * - PATCH  /api/conversations/:id            : Updates metadata (name and avatar).
  * ============================================================================
@@ -16,18 +17,38 @@ import { messageRouter } from "../messages/index.ts";
 import {
   conversationUpdateSchema,
   directConversationSchema,
+  userSearchQuerySchema,
 } from "./conversation.schemas.ts";
 import {
   createOrRestoreDirectConversation,
   hideConversation,
   listVisibleConversations,
+  searchUsers,
   updateConversation,
 } from "./conversation.service.ts";
 
 export const conversationRouter = Router();
+export const userSearchRouter = Router();
 
 // Nested routes for messages within a conversation
 conversationRouter.use("/:conversationId/messages", messageRouter);
+
+// ============================================================================
+// Participant Discovery Routes
+// ============================================================================
+
+/**
+ * Searches users by username or email for starting a conversation.
+ */
+userSearchRouter.get("/search", async (req, res) => {
+  const parsed = userSearchQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid query parameters" });
+  }
+
+  const users = await searchUsers(req.user!.id, parsed.data);
+  return res.json({ users });
+});
 
 // ============================================================================
 // Conversation Management Routes
@@ -44,7 +65,7 @@ conversationRouter.get("/", async (req, res) => {
 /**
  * Creates a direct conversation with another participant or restores an existing hidden one.
  */
-conversationRouter.post("/direct", async (req, res) => {
+conversationRouter.post("/", async (req, res) => {
   const parsed = directConversationSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid participant" });

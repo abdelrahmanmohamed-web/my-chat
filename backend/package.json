@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "tsx watch --env-file=.env.secrets src/server.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "check:env": "tsx scripts/check-env.ts",
+    "prebuild": "tsx scripts/check-env.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node --env-file=.env.secrets dist/server.js",
     "lint": "eslint .",

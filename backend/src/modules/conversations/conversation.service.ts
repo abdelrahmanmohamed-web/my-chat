@@ -18,6 +18,7 @@ import { Conversation } from "./conversation.model.ts";
 import type {
   ConversationUpdateInput,
   DirectConversationInput,
+  UserSearchQuery,
 } from "./conversation.schemas.ts";
 
 // ============================================================================
@@ -113,6 +114,69 @@ function isDuplicateKeyError(error: unknown): boolean {
     "code" in error &&
     error.code === 11000
   );
+}
+
+/**
+ * Escapes special regular expression characters in a user-supplied search term.
+ *
+ * @param value Raw search input string
+ * @returns Escaped pattern safe for RegExp construction
+ */
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// ============================================================================
+// User Search Operations
+// ============================================================================
+
+export interface ConversationUserSearchResult {
+  id: string;
+  email: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  status: "online" | "offline";
+}
+
+/**
+ * Searches users by username or email for starting direct conversations,
+ * excluding the requesting user and sensitive internal fields.
+ *
+ * @param currentUserId Authenticated user initiating the search
+ * @param input Validated search query and result limit
+ * @returns List of matching sanitized user profiles
+ */
+export async function searchUsers(
+  currentUserId: string,
+  input: UserSearchQuery,
+): Promise<ConversationUserSearchResult[]> {
+  const normalizedQuery = input.q.trim().toLowerCase();
+  if (!normalizedQuery) return [];
+
+  const pattern = new RegExp(escapeRegex(normalizedQuery), "i");
+  const filter: Record<string, unknown> = {
+    $or: [{ username: pattern }, { email: pattern }],
+  };
+
+  if (Types.ObjectId.isValid(currentUserId)) {
+    filter._id = { $ne: new Types.ObjectId(currentUserId) };
+  }
+
+  const users = await User.find(filter)
+    .select("_id email username displayName avatarUrl status")
+    .sort({ username: 1, _id: 1 })
+    .limit(input.limit)
+    .lean();
+
+  return users.map((user) => ({
+    id: user._id.toString(),
+    email: user.email,
+    username: user.username,
+    displayName: user.displayName,
+    avatarUrl: user.avatarUrl ?? null,
+    status: user.status === "online" ? "online" : "offline",
+  }));
 }
 
 // ============================================================================

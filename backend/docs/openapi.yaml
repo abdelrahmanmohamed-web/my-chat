@@ -23,6 +23,8 @@ tags:
     description: "Account registration, login, token rotation, logout, profile, and password updates."
   - name: Sessions
     description: "Active session inspection, naming, and revocation."
+  - name: Users
+    description: User discovery and search for starting conversations.
   - name: Conversations
     description: "Direct conversation creation, listing, hiding, and metadata updates."
   - name: Messages
@@ -582,6 +584,66 @@ paths:
           "$ref": "#/components/responses/TooManyRequests"
         "500":
           "$ref": "#/components/responses/InternalServerError"
+  "/api/users/search":
+    get:
+      tags:
+        - Users
+      operationId: searchUsers
+      summary: Search users by username or email
+      description: "Searches registered users by case-insensitive substring match against `username` or `email`, excluding the authenticated caller and sensitive fields."
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: "Search term matched case-insensitively against username or email (trimmed, 1-100 characters)."
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+        - name: limit
+          in: query
+          required: false
+          description: "Maximum number of matching users to return (integer coerced from query string, 1-50, default 20)."
+          schema:
+            default: 20
+            type: integer
+            minimum: 1
+            maximum: 50
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Matching users list.
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - users
+                properties:
+                  users:
+                    type: array
+                    items:
+                      "$ref": "#/components/schemas/UserSearchResult"
+        "400":
+          description: Missing or invalid query parameters.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Invalid query parameters
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
   "/api/conversations/{conversationId}/messages":
     get:
       tags:
@@ -834,13 +896,12 @@ paths:
           "$ref": "#/components/responses/TooManyRequests"
         "500":
           "$ref": "#/components/responses/InternalServerError"
-  "/api/conversations/direct":
     post:
       tags:
         - Conversations
       operationId: createOrRestoreDirectConversation
       summary: Create or restore a direct conversation
-      description: "Creates a 1-on-1 direct conversation with `participantId` (201) or returns/unhides an existing one (200)."
+      description: "Creates a 1-on-1 direct conversation with `participantId` in the request body (201) or returns/unhides an existing one (200)."
       security:
         - bearerAuth: []
       requestBody:
@@ -1224,6 +1285,35 @@ components:
       properties:
         user:
           "$ref": "#/components/schemas/PublicUser"
+    UserSearchResult:
+      type: object
+      required:
+        - id
+        - email
+        - username
+        - displayName
+        - avatarUrl
+        - status
+      description: Sanitized user search result returned by GET /api/users/search.
+      properties:
+        id:
+          type: string
+          pattern: "^[0-9a-fA-F]{24}$"
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum:
+            - online
+            - offline
     SanitizedSession:
       type: object
       required:
