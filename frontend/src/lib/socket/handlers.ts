@@ -13,6 +13,8 @@ import {
   useAuthStore,
   useConnectionStore,
   useOutboxStore,
+  usePresenceStore,
+  useTypingStore,
 } from "@/stores";
 import type { Conversation } from "@/types/conversations";
 import type {
@@ -22,7 +24,7 @@ import type {
   SocketTransportName,
 } from "@/types/socket";
 import type { RealtimeEngineLike, RealtimeSocket } from "./events";
-import { flushOutbox } from "./resilience";
+import { flushOutbox, markMessageReadWithResilience } from "./resilience";
 
 const SOCKET_ERR_MISSING_AUTH = "Unauthorized: Missing authorization header";
 const SOCKET_ERR_EXPIRED_TOKEN = "Unauthorized: Invalid or expired token";
@@ -38,6 +40,8 @@ function performCentralSocketLogout(
   const wasAuthenticated = useAuthStore.getState().status === "authenticated";
   socketInstance.disconnect();
   useOutboxStore.getState().clearOutbox();
+  usePresenceStore.getState().clearPresence();
+  useTypingStore.getState().clearAllTyping();
   useConnectionStore.getState().resetConnection();
   useAuthStore.getState().clearAuth();
   queryClient.clear();
@@ -157,6 +161,7 @@ export function registerRealtimeHandlers(
     }
 
     void flushOutbox(socketInstance, queryClient);
+    usePresenceStore.getState().clearPresence();
   };
 
   const handleDisconnect = (reason: string) => {
@@ -273,11 +278,27 @@ export function registerRealtimeHandlers(
       );
     }
 
+    const currentUserId = useAuthStore.getState().user?.id;
+    const isOwnMessage = Boolean(
+      currentUserId && incoming.senderId === currentUserId,
+    );
+    const activeConversationId =
+      useConnectionStore.getState().activeConversationId;
+    const isTabActive =
+      typeof document !== "undefined" &&
+      document.visibilityState === "visible" &&
+      (typeof document.hasFocus !== "function" || document.hasFocus());
+    const isOpenAndVisible =
+      isTabActive && activeConversationId === conversationId;
+    const shouldIncrementUnread = !isOwnMessage && !isOpenAndVisible;
+
     let matchedConversation = false;
     queryClient.setQueryData<Conversation[]>(
       QUERY_KEYS.conversations,
       (current) => {
-        const next = updateConversationLastMessageInCache(current, incoming);
+        const next = updateConversationLastMessageInCache(current, incoming, {
+          incrementUnread: shouldIncrementUnread,
+        });
         if (next) {
           matchedConversation = true;
           return next;
@@ -290,6 +311,36 @@ export function registerRealtimeHandlers(
       void queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.conversations,
       });
+    }
+
+    if (isOpenAndVisible && !isOwnMessage) {
+      void markMessageReadWithResilience({
+        socketInstance,
+        conversationId,
+        messageId: incoming._id,
+      });
+    } else if (shouldIncrementUnread) {
+      if (
+        typeof Notification !== "undefined" &&
+        Notification.permission === "granted"
+      ) {
+        try {
+          const cached = queryClient.getQueryData<Conversation[]>(
+            QUERY_KEYS.conversations,
+          );
+          const found = cached?.find((c) => c._id === conversationId);
+          const title = found?.name?.trim() || "رسالة جديدة";
+          const notif = new Notification(title, {
+            body: incoming.content,
+            tag: conversationId,
+          });
+          notif.onclick = () => {
+            window.focus();
+          };
+        } catch {
+          // Ignore notification runtime errors
+        }
+      }
     }
   };
 
@@ -314,11 +365,30 @@ export function registerRealtimeHandlers(
     );
   };
 
+  const handleUserTyping = (payload: {
+    conversationId: string;
+    userId: string;
+    isTyping: boolean;
+  }) => {
+    useTypingStore
+      .getState()
+      .setTyping(payload.conversationId, payload.userId, payload.isTyping);
+  };
+
+  const handleUserStatus = (payload: {
+    userId: string;
+    status: "online" | "offline";
+  }) => {
+    usePresenceStore.getState().setUserStatus(payload.userId, payload.status);
+  };
+
   socketInstance.on("connect", handleConnect);
   socketInstance.on("disconnect", handleDisconnect);
   socketInstance.on("connect_error", handleConnectError);
   socketInstance.on("message:new", handleMessageNew);
   socketInstance.on("message:read_update", handleMessageReadUpdate);
+  socketInstance.on("user:typing", handleUserTyping);
+  socketInstance.on("user:status", handleUserStatus);
   socketInstance.io?.on("reconnect_attempt", handleReconnectAttempt);
 
   return () => {
@@ -329,6 +399,8 @@ export function registerRealtimeHandlers(
     socketInstance.off("connect_error", handleConnectError);
     socketInstance.off("message:new", handleMessageNew);
     socketInstance.off("message:read_update", handleMessageReadUpdate);
+    socketInstance.off("user:typing", handleUserTyping);
+    socketInstance.off("user:status", handleUserStatus);
     socketInstance.io?.off("reconnect_attempt", handleReconnectAttempt);
   };
 }

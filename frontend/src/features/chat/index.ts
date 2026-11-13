@@ -5,6 +5,7 @@ export { MessageComposer } from "./components/MessageComposer";
 export { MessageContent } from "./components/MessageContent";
 export { MessageItem } from "./components/MessageItem";
 export { MessageStatusIcon } from "./components/MessageStatusIcon";
+export { TypingIndicator } from "./components/TypingIndicator";
 export {
   applyReadUpdateToCache,
   createOptimisticMessage,
@@ -25,3 +26,5 @@ export {
   useSendMessageMutation,
   type SendMessageVariables,
 } from "./use-messages";
+export { useTypingSender } from "./use-typing-sender";
+export { useDocumentTitleUnread } from "./use-unread-title";

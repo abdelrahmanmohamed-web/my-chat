@@ -40,6 +40,7 @@ export interface Conversation {
   hiddenFor: string[];
   name: string | null;
   avatarUrl: string | null;
+  unreadCount?: number;
   lastMessageAt: string | null;
   lastMessage?: ConversationLastMessage;
   createdAt: string;

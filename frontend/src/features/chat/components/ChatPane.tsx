@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRightIcon,
   EyeOffIcon,
@@ -8,6 +9,7 @@ import {
 import { Link, useNavigate } from "react-router";
 import { Virtuoso } from "react-virtuoso";
 import { cn } from "cn";
+import { QUERY_KEYS } from "@/app/query-client";
 import { ROUTES } from "@/app/routes";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -31,7 +33,8 @@ import {
 } from "@/features/conversations";
 import { toApiError } from "@/lib/api";
 import { isDifferentCalendarDay } from "@/lib/date";
-import { useAuthStore } from "@/stores";
+import { useAuthStore, useConnectionStore, usePresenceStore } from "@/stores";
+import type { Conversation } from "@/types/conversations";
 import type { ChatMessage } from "@/types/messages";
 import {
   findHighestReadMessageIndex,
@@ -42,8 +45,10 @@ import {
   useMessagesInfiniteQuery,
   useSendMessageMutation,
 } from "../use-messages";
+import { useTypingSender } from "../use-typing-sender";
 import { MessageComposer } from "./MessageComposer";
 import { MessageItem } from "./MessageItem";
+import { TypingIndicator } from "./TypingIndicator";
 
 const VIRTUOSO_START_INDEX = 100_000;
 
@@ -83,6 +88,7 @@ interface ChatPaneProps {
 
 export function ChatPane({ conversationId }: ChatPaneProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const currentUserId = useAuthStore((state) => state.user?.id ?? "");
   const [isEditOpen, setIsEditOpen] = useState(false);
 
@@ -96,10 +102,49 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
     [conversationsQuery.data, conversationId],
   );
 
+  const otherUserId = useMemo(() => {
+    return (
+      conversation?.participantIds?.find((id) => id !== currentUserId) ?? null
+    );
+  }, [conversation?.participantIds, currentUserId]);
+
+  const isRestFallbackActive = useConnectionStore(
+    (state) => state.isRestFallbackActive,
+  );
+  const otherPresence = usePresenceStore((state) =>
+    otherUserId ? state.statusByUserId[otherUserId] : undefined,
+  );
+
+  useEffect(() => {
+    queryClient.setQueryData<Conversation[]>(
+      QUERY_KEYS.conversations,
+      (current) => {
+        if (!current) {
+          return current;
+        }
+        let changed = false;
+        const next = current.map((item) => {
+          if (item._id === conversationId && item.unreadCount) {
+            changed = true;
+            return { ...item, unreadCount: 0 };
+          }
+          return item;
+        });
+        return changed ? next : current;
+      },
+    );
+  }, [conversationId, queryClient]);
+
   const messagesQuery = useMessagesInfiniteQuery(conversationId);
   const sendMessageMutation = useSendMessageMutation(conversationId);
   const markReadMutation = useMarkMessageReadMutation(conversationId);
   const hideConversationMutation = useHideConversationMutation();
+
+  const {
+    handleKeystroke,
+    handleBlur,
+    handleSend: handleTypingSend,
+  } = useTypingSender(conversationId);
 
   const markedMessageIdsRef = useRef<Set<string>>(new Set());
 
@@ -136,10 +181,19 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
       const prev = index > 0 ? chronologicalMessages[index - 1] : null;
       const showDateSeparator =
         !prev || isDifferentCalendarDay(prev.createdAt, message.createdAt);
+      const isSameSender = prev?.senderId === message.senderId;
+      const isTimeClose =
+        prev &&
+        Math.abs(
+          new Date(message.createdAt).getTime() -
+            new Date(prev.createdAt).getTime(),
+        ) <=
+          2 * 60 * 1000;
       const isGroupedWithPrevious =
         Boolean(prev) &&
         !showDateSeparator &&
-        prev?.senderId === message.senderId;
+        isSameSender &&
+        Boolean(isTimeClose);
       const isOwn = message.senderId === currentUserId;
       const isConfirmed =
         message.localStatus !== "sending" && message.localStatus !== "failed";
@@ -171,7 +225,7 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
 
   const { mutate: markReadMutate } = markReadMutation;
 
-  useEffect(() => {
+  const triggerMarkRead = useCallback(() => {
     if (!latestIncomingConfirmed || !currentUserId) {
       return;
     }
@@ -186,15 +240,46 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
       return;
     }
 
+    const isTabActive =
+      typeof document !== "undefined" &&
+      document.visibilityState === "visible" &&
+      (typeof document.hasFocus !== "function" || document.hasFocus());
+
+    if (!isTabActive) {
+      return;
+    }
+
     markedMessageIdsRef.current.add(latestIncomingConfirmed._id);
     markReadMutate(latestIncomingConfirmed._id);
   }, [currentUserId, latestIncomingConfirmed, markReadMutate]);
 
+  useEffect(() => {
+    const timerId = window.setTimeout(() => {
+      triggerMarkRead();
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [triggerMarkRead]);
+
+  useEffect(() => {
+    const handleFocus = () => triggerMarkRead();
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+    };
+  }, [triggerMarkRead]);
+
   const handleSend = useCallback(
     (content: string) => {
+      handleTypingSend();
       sendMessageMutation.mutate({ content });
     },
-    [sendMessageMutation],
+    [handleTypingSend, sendMessageMutation],
   );
 
   const handleRetry = useCallback(
@@ -244,6 +329,18 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
             <h1 className="truncate text-sm font-semibold text-foreground">
               {headerTitle}
             </h1>
+            {!isRestFallbackActive &&
+              (otherPresence === "online" ? (
+                <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                  <span
+                    className="size-1.5 rounded-full bg-emerald-500"
+                    aria-hidden="true"
+                  />
+                  <span>متصل الآن</span>
+                </p>
+              ) : otherPresence === "offline" ? (
+                <p className="text-xs text-muted-foreground">غير متصل</p>
+              ) : null)}
           </div>
         </div>
 
@@ -375,7 +472,14 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
           )}
       </div>
 
-      <MessageComposer disabled={messagesQuery.isError} onSend={handleSend} />
+      <TypingIndicator conversationId={conversationId} />
+
+      <MessageComposer
+        disabled={messagesQuery.isError}
+        onSend={handleSend}
+        onKeystroke={handleKeystroke}
+        onBlur={handleBlur}
+      />
 
       <EditConversationDialog
         conversation={isEditOpen ? conversation : null}

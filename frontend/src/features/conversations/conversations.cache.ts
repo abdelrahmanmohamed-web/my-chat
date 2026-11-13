@@ -48,6 +48,7 @@ export function upsertConversationInCache(
 export function updateConversationLastMessageInCache(
   conversations: ReadonlyArray<Conversation> | undefined,
   message: Message,
+  options?: { incrementUnread?: boolean },
 ): Conversation[] | undefined {
   if (!conversations) {
     return conversations;
@@ -73,8 +74,13 @@ export function updateConversationLastMessageInCache(
       return conversation;
     }
 
+    const unreadCount = options?.incrementUnread
+      ? (conversation.unreadCount ?? 0) + 1
+      : conversation.unreadCount;
+
     return {
       ...conversation,
+      unreadCount,
       lastMessageAt: message.createdAt,
       updatedAt: message.createdAt,
       lastMessage: {

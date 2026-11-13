@@ -17,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ThemeSubMenu } from "@/components/theme-toggle";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLogoutMutation } from "@/features/auth";
@@ -130,6 +131,7 @@ export function ConversationsSidebar({
                 <ShieldCheckIcon aria-hidden="true" />
                 <span>الأمان والجلسات</span>
               </DropdownMenuItem>
+              <ThemeSubMenu />
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"

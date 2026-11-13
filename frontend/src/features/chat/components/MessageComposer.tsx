@@ -7,11 +7,15 @@ import { MESSAGE_LIMITS, sendMessageSchema } from "@/types/messages";
 interface MessageComposerProps {
   disabled?: boolean;
   onSend: (content: string) => void;
+  onKeystroke?: () => void;
+  onBlur?: () => void;
 }
 
 export function MessageComposer({
   disabled = false,
   onSend,
+  onKeystroke,
+  onBlur,
 }: MessageComposerProps) {
   const [content, setContent] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -68,11 +72,13 @@ export function MessageComposer({
           value={content}
           disabled={disabled}
           onKeyDown={handleKeyDown}
+          onBlur={onBlur}
           onChange={(event) => {
             setContent(event.target.value);
             if (validationError) {
               setValidationError(null);
             }
+            onKeystroke?.();
           }}
           placeholder="اكتب رسالة..."
           aria-label="نص الرسالة"

@@ -9,8 +9,10 @@ import {
 } from "@/features/conversations";
 import { ChatEmptyState } from "../components/ChatEmptyState";
 import { ChatPane } from "../components/ChatPane";
+import { useDocumentTitleUnread } from "../use-unread-title";
 
 export function ChatWorkspacePage() {
+  useDocumentTitleUnread();
   const { conversationId } = useParams<{ conversationId?: string }>();
   const navigate = useNavigate();
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);

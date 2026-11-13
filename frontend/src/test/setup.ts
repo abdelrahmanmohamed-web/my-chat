@@ -3,7 +3,13 @@ import { cleanup, configure } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
 import { queryClient } from "@/app/query-client";
 import { socket } from "@/lib/socket";
-import { useAuthStore, useConnectionStore, useOutboxStore } from "@/stores";
+import {
+  useAuthStore,
+  useConnectionStore,
+  useOutboxStore,
+  usePresenceStore,
+  useTypingStore,
+} from "@/stores";
 import { mswServer } from "./msw/server";
 
 configure({ asyncUtilTimeout: 3000 });
@@ -34,6 +40,8 @@ afterEach(() => {
   socket.disconnect();
   queryClient.clear();
   useOutboxStore.getState().clearOutbox();
+  usePresenceStore.getState().clearPresence();
+  useTypingStore.getState().clearAllTyping();
   useConnectionStore.getState().resetConnection();
   useAuthStore.setState({
     accessToken: null,
