@@ -4,17 +4,18 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { QUERY_KEYS } from "@/app/query-client";
+import { useRealtimeSocket } from "@/features/connection";
+import { updateConversationLastMessageInCache } from "@/features/conversations";
+import { listMessages, toApiError } from "@/lib/api";
 import {
-  listMessages,
-  markMessageReadRest,
-  sendMessageRest,
-  toApiError,
-} from "@/lib/api";
-import { useAuthStore } from "@/stores";
+  markMessageReadWithResilience,
+  MESSAGES_REST_POLL_INTERVAL_MS,
+  sendMessageWithResilience,
+} from "@/lib/socket";
+import { useAuthStore, useConnectionStore } from "@/stores";
 import type { Conversation } from "@/types/conversations";
 import type { Message } from "@/types/messages";
 import { MESSAGE_LIMITS } from "@/types/messages";
-import { updateConversationLastMessageInCache } from "@/features/conversations";
 import {
   applyReadUpdateToCache,
   createOptimisticMessage,
@@ -56,6 +57,15 @@ export function useMessagesInfiniteQuery(
   options?: { refetchInterval?: number | false },
 ) {
   const status = useAuthStore((state) => state.status);
+  const isRestFallbackActive = useConnectionStore(
+    (state) => state.isRestFallbackActive,
+  );
+  const resolvedRefetchInterval =
+    options?.refetchInterval !== undefined
+      ? options.refetchInterval
+      : isRestFallbackActive
+        ? MESSAGES_REST_POLL_INTERVAL_MS
+        : false;
 
   return useInfiniteQuery<
     ChatMessagesPage,
@@ -90,12 +100,13 @@ export function useMessagesInfiniteQuery(
     },
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: Boolean(conversationId && status === "authenticated"),
-    refetchInterval: options?.refetchInterval ?? false,
+    refetchInterval: resolvedRefetchInterval,
   });
 }
 
 export function useSendMessageMutation(conversationId: string) {
   const queryClient = useQueryClient();
+  const socketInstance = useRealtimeSocket();
 
   return useMutation<
     { message: Message; clientId: string },
@@ -105,11 +116,12 @@ export function useSendMessageMutation(conversationId: string) {
   >({
     mutationFn: async (variables) => {
       const clientId = resolveMessageClientId(variables);
-      const { message } = await sendMessageRest(conversationId, {
+      return sendMessageWithResilience({
+        socketInstance,
+        conversationId,
         content: variables.content,
         clientId,
       });
-      return { message, clientId };
     },
     onMutate: async (variables) => {
       const clientId = resolveMessageClientId(variables);
@@ -179,12 +191,15 @@ export function useSendMessageMutation(conversationId: string) {
 
 export function useMarkMessageReadMutation(conversationId: string) {
   const queryClient = useQueryClient();
+  const socketInstance = useRealtimeSocket();
 
   return useMutation({
-    mutationFn: async (messageId: string) => {
-      await markMessageReadRest(conversationId, messageId);
-      return messageId;
-    },
+    mutationFn: (messageId: string) =>
+      markMessageReadWithResilience({
+        socketInstance,
+        conversationId,
+        messageId,
+      }),
     onSuccess: (messageId) => {
       const currentUserId = useAuthStore.getState().user?.id;
       if (!currentUserId) {

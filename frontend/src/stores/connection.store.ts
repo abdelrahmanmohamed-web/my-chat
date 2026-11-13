@@ -10,6 +10,8 @@ export interface ConnectionState {
   transport: SocketTransportName;
   activeConversationId: string | null;
   disconnectedSince: number | null;
+  isRestFallbackActive: boolean;
+  browserOnline: boolean;
   lastError: string | null;
   joinError: JoinConversationError | null;
   setConnecting: () => void;
@@ -18,6 +20,8 @@ export interface ConnectionState {
   setTransport: (transport: SocketTransportName) => void;
   setDisconnected: (reason?: string) => void;
   setConnectionError: (message: string | null, willRetry: boolean) => void;
+  setRestFallbackActive: (active: boolean) => void;
+  setBrowserOnline: (online: boolean) => void;
   setActiveConversationId: (conversationId: string | null) => void;
   setJoinError: (error: JoinConversationError | null) => void;
   resetConnection: () => void;
@@ -31,6 +35,9 @@ export const useConnectionStore = create<ConnectionState>()((set) => ({
   transport: null,
   activeConversationId: null,
   disconnectedSince: null,
+  isRestFallbackActive: false,
+  browserOnline:
+    typeof navigator !== "undefined" ? navigator.onLine !== false : true,
   lastError: null,
   joinError: null,
 
@@ -41,16 +48,18 @@ export const useConnectionStore = create<ConnectionState>()((set) => ({
     })),
 
   setReconnecting: () =>
-    set({
+    set((state) => ({
       status: "reconnecting",
       transport: null,
-    }),
+      disconnectedSince: state.disconnectedSince ?? Date.now(),
+    })),
 
   setConnected: (transport) =>
     set({
       status: "connected",
       transport,
       disconnectedSince: null,
+      isRestFallbackActive: false,
       lastError: null,
     }),
 
@@ -75,6 +84,18 @@ export const useConnectionStore = create<ConnectionState>()((set) => ({
       lastError: message,
     })),
 
+  setRestFallbackActive: (active) =>
+    set((state) =>
+      state.isRestFallbackActive === active
+        ? state
+        : { isRestFallbackActive: active },
+    ),
+
+  setBrowserOnline: (online) =>
+    set({
+      browserOnline: online,
+    }),
+
   setActiveConversationId: (conversationId) =>
     set((state) => ({
       activeConversationId: conversationId,
@@ -95,6 +116,9 @@ export const useConnectionStore = create<ConnectionState>()((set) => ({
       transport: null,
       activeConversationId: null,
       disconnectedSince: null,
+      isRestFallbackActive: false,
+      browserOnline:
+        typeof navigator !== "undefined" ? navigator.onLine !== false : true,
       lastError: null,
       joinError: null,
     }),

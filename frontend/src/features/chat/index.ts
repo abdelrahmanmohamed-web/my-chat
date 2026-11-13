@@ -12,6 +12,7 @@ export {
   flattenMessagesPages,
   insertOptimisticMessage,
   markOptimisticMessageFailed,
+  markOptimisticMessageSending,
   reconcileOptimisticMessage,
   upsertMessageInCache,
   type ChatMessagesInfiniteData,

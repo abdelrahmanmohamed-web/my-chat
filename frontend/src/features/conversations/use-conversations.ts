@@ -9,7 +9,8 @@ import {
   toApiError,
   updateConversation,
 } from "@/lib/api";
-import { useAuthStore } from "@/stores";
+import { CONVERSATIONS_REST_POLL_INTERVAL_MS } from "@/lib/socket";
+import { useAuthStore, useConnectionStore } from "@/stores";
 import type {
   Conversation,
   CreateDirectConversationRequest,
@@ -25,6 +26,15 @@ export function useConversationsQuery(options?: {
   refetchInterval?: number | false;
 }) {
   const status = useAuthStore((state) => state.status);
+  const isRestFallbackActive = useConnectionStore(
+    (state) => state.isRestFallbackActive,
+  );
+  const resolvedRefetchInterval =
+    options?.refetchInterval !== undefined
+      ? options.refetchInterval
+      : isRestFallbackActive
+        ? CONVERSATIONS_REST_POLL_INTERVAL_MS
+        : false;
 
   return useQuery({
     queryKey: QUERY_KEYS.conversations,
@@ -33,7 +43,7 @@ export function useConversationsQuery(options?: {
       return sortConversationsByActivity(conversations);
     },
     enabled: status === "authenticated",
-    refetchInterval: options?.refetchInterval ?? false,
+    refetchInterval: resolvedRefetchInterval,
   });
 }
 

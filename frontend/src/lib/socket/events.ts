@@ -1,6 +1,8 @@
+import type { Message } from "@/types/messages";
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
+  SocketAck,
 } from "@/types/socket";
 
 export const SOCKET_EVENTS = {
@@ -52,6 +54,22 @@ export interface SocketReservedEventListeners {
 export type RealtimeListenEventMap = ServerToClientEvents &
   SocketReservedEventListeners;
 
+export interface RealtimeTimeoutSocket {
+  emit(
+    event: "message:send",
+    payload: { conversationId: string; content: string; clientId?: string },
+    ack: (
+      err: Error | null,
+      response?: SocketAck<{ message: Message; duplicate: boolean }>,
+    ) => void,
+  ): unknown;
+  emit(
+    event: "message:read",
+    payload: { conversationId: string; messageId: string },
+    ack: (err: Error | null, response?: SocketAck<{ status: "ok" }>) => void,
+  ): unknown;
+}
+
 /**
  * Minimal typed socket surface shared between the production Socket.io client
  * and unit/integration fake sockets.
@@ -62,6 +80,7 @@ export interface RealtimeSocket {
   readonly io?: RealtimeManagerLike;
   connect: () => unknown;
   disconnect: () => unknown;
+  timeout: (timeout: number) => RealtimeTimeoutSocket;
   on(event: "connect", listener: () => void): unknown;
   on(event: "disconnect", listener: (reason: string) => void): unknown;
   on(event: "connect_error", listener: (error: Error) => void): unknown;

@@ -1,3 +1,4 @@
+export { ConnectivityBanner } from "./ConnectivityBanner";
 export { ConnectionStatusIndicator } from "./ConnectionStatusIndicator";
 export { RealtimeProvider } from "./RealtimeProvider";
 export { useRealtimeSocket } from "./socket-context";

@@ -14,7 +14,7 @@ import {
   revokeSession,
   updateSessionName,
 } from "@/lib/api";
-import { useAuthStore } from "@/stores";
+import { useAuthStore, useOutboxStore } from "@/stores";
 import type {
   ChangePasswordRequest,
   LoginRequest,
@@ -65,6 +65,7 @@ export function useLogoutMutation() {
       try {
         await logoutUser();
       } finally {
+        useOutboxStore.getState().clearOutbox();
         useAuthStore.getState().clearAuth();
         queryClient.clear();
       }

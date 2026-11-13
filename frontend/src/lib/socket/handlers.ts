@@ -1,12 +1,19 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { QUERY_KEYS } from "@/app/query-client";
 import {
   applyReadUpdateToCache,
   type ChatMessagesInfiniteData,
   upsertMessageInCache,
-} from "@/features/chat";
-import { updateConversationLastMessageInCache } from "@/features/conversations";
-import { getAccessToken, useAuthStore, useConnectionStore } from "@/stores";
+} from "@/features/chat/messages.cache";
+import { updateConversationLastMessageInCache } from "@/features/conversations/conversations.cache";
+import { refreshSession } from "@/lib/api";
+import {
+  getAccessToken,
+  useAuthStore,
+  useConnectionStore,
+  useOutboxStore,
+} from "@/stores";
 import type { Conversation } from "@/types/conversations";
 import type {
   MessageNewEventPayload,
@@ -15,6 +22,30 @@ import type {
   SocketTransportName,
 } from "@/types/socket";
 import type { RealtimeEngineLike, RealtimeSocket } from "./events";
+import { flushOutbox } from "./resilience";
+
+const SOCKET_ERR_MISSING_AUTH = "Unauthorized: Missing authorization header";
+const SOCKET_ERR_EXPIRED_TOKEN = "Unauthorized: Invalid or expired token";
+const SOCKET_ERR_INVALID_PAYLOAD = "Unauthorized: Invalid token payload";
+const SOCKET_ERR_SESSION_REVOKED =
+  "Unauthorized: Session is invalid or revoked";
+
+function performCentralSocketLogout(
+  socketInstance: RealtimeSocket,
+  queryClient: QueryClient,
+  toastMessage: string,
+): void {
+  const wasAuthenticated = useAuthStore.getState().status === "authenticated";
+  socketInstance.disconnect();
+  useOutboxStore.getState().clearOutbox();
+  useConnectionStore.getState().resetConnection();
+  useAuthStore.getState().clearAuth();
+  queryClient.clear();
+
+  if (wasAuthenticated) {
+    toast.error(toastMessage);
+  }
+}
 
 export function normalizeTransportName(
   name: string | undefined,
@@ -72,6 +103,9 @@ export function registerRealtimeHandlers(
   queryClient: QueryClient,
 ): () => void {
   let boundEngine: RealtimeEngineLike | null = null;
+  let refreshRetryUsed = false;
+  let isHandlingAuthRecovery = false;
+  let isDisposed = false;
 
   const handleEngineUpgrade = (transport: { name: string }) => {
     useConnectionStore
@@ -97,6 +131,8 @@ export function registerRealtimeHandlers(
   };
 
   const handleConnect = () => {
+    refreshRetryUsed = false;
+    isHandlingAuthRecovery = false;
     const connectionStore = useConnectionStore.getState();
     const transport = normalizeTransportName(
       socketInstance.io?.engine?.transport?.name,
@@ -119,6 +155,8 @@ export function registerRealtimeHandlers(
         queryKey: QUERY_KEYS.messages(activeConversationId),
       });
     }
+
+    void flushOutbox(socketInstance, queryClient);
   };
 
   const handleDisconnect = (reason: string) => {
@@ -145,9 +183,73 @@ export function registerRealtimeHandlers(
   };
 
   const handleConnectError = (error: Error) => {
+    const message = error.message;
+
+    if (message === SOCKET_ERR_EXPIRED_TOKEN) {
+      if (isHandlingAuthRecovery) {
+        return;
+      }
+      if (refreshRetryUsed) {
+        performCentralSocketLogout(
+          socketInstance,
+          queryClient,
+          "انتهت جلستك. سجّل الدخول مرة أخرى.",
+        );
+        return;
+      }
+
+      refreshRetryUsed = true;
+      isHandlingAuthRecovery = true;
+      useConnectionStore.getState().setConnectionError(message, true);
+
+      void refreshSession()
+        .then((newToken) => {
+          if (isDisposed) {
+            return;
+          }
+
+          if (newToken && useAuthStore.getState().status === "authenticated") {
+            useConnectionStore.getState().setReconnecting();
+            socketInstance.connect();
+            return;
+          }
+
+          performCentralSocketLogout(
+            socketInstance,
+            queryClient,
+            "انتهت جلستك. سجّل الدخول مرة أخرى.",
+          );
+        })
+        .finally(() => {
+          isHandlingAuthRecovery = false;
+        });
+      return;
+    }
+
+    if (message === SOCKET_ERR_SESSION_REVOKED) {
+      performCentralSocketLogout(
+        socketInstance,
+        queryClient,
+        "انتهت جلستك. سجّل الدخول مرة أخرى.",
+      );
+      return;
+    }
+
+    if (
+      message === SOCKET_ERR_MISSING_AUTH ||
+      message === SOCKET_ERR_INVALID_PAYLOAD
+    ) {
+      performCentralSocketLogout(
+        socketInstance,
+        queryClient,
+        "تعذر التحقق من جلستك. سجّل الدخول مرة أخرى.",
+      );
+      return;
+    }
+
     useConnectionStore
       .getState()
-      .setConnectionError(error.message, socketInstance.active);
+      .setConnectionError(message, socketInstance.active);
   };
 
   const handleReconnectAttempt = () => {
@@ -220,6 +322,7 @@ export function registerRealtimeHandlers(
   socketInstance.io?.on("reconnect_attempt", handleReconnectAttempt);
 
   return () => {
+    isDisposed = true;
     detachEngineUpgrade();
     socketInstance.off("connect", handleConnect);
     socketInstance.off("disconnect", handleDisconnect);

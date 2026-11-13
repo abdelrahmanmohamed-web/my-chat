@@ -156,6 +156,39 @@ export function reconcileOptimisticMessage(
 }
 
 /**
+ * Marks a failed optimistic message back as sending (e.g. during outbox flush).
+ */
+export function markOptimisticMessageSending(
+  data: ChatMessagesInfiniteData | undefined,
+  clientId: string,
+): ChatMessagesInfiniteData | undefined {
+  if (!data) {
+    return data;
+  }
+
+  let matched = false;
+  const pages = data.pages.map((page) => ({
+    ...page,
+    messages: page.messages.map((item) => {
+      if (
+        (item.clientId === clientId || item._id === clientId) &&
+        item.localStatus !== "sent"
+      ) {
+        matched = true;
+        return {
+          ...item,
+          localStatus: "sending" as const,
+          errorMessage: undefined,
+        };
+      }
+      return item;
+    }),
+  }));
+
+  return matched ? { ...data, pages } : data;
+}
+
+/**
  * Marks a pending optimistic message as failed with a user-facing error reason.
  */
 export function markOptimisticMessageFailed(
@@ -171,7 +204,10 @@ export function markOptimisticMessageFailed(
   const pages = data.pages.map((page) => ({
     ...page,
     messages: page.messages.map((item) => {
-      if (item.clientId === clientId || item._id === clientId) {
+      if (
+        (item.clientId === clientId || item._id === clientId) &&
+        item.localStatus !== "sent"
+      ) {
         matched = true;
         return {
           ...item,

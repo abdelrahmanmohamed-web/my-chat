@@ -1,10 +1,12 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
 import { queryClient } from "@/app/query-client";
 import { socket } from "@/lib/socket";
-import { useAuthStore, useConnectionStore } from "@/stores";
+import { useAuthStore, useConnectionStore, useOutboxStore } from "@/stores";
 import { mswServer } from "./msw/server";
+
+configure({ asyncUtilTimeout: 3000 });
 
 if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
   Object.defineProperty(window, "matchMedia", {
@@ -31,6 +33,7 @@ afterEach(() => {
   cleanup();
   socket.disconnect();
   queryClient.clear();
+  useOutboxStore.getState().clearOutbox();
   useConnectionStore.getState().resetConnection();
   useAuthStore.setState({
     accessToken: null,

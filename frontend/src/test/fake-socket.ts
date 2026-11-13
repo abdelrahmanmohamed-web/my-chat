@@ -3,7 +3,9 @@ import type {
   RealtimeListenEventMap,
   RealtimeManagerLike,
   RealtimeSocket,
+  RealtimeTimeoutSocket,
 } from "@/lib/socket";
+import type { Message } from "@/types/messages";
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
@@ -21,6 +23,7 @@ type StoredListener =
 export interface EmittedSocketCall {
   event: keyof ClientToServerEvents;
   args: unknown[];
+  timeoutMs?: number;
 }
 
 export class FakeRealtimeSocket implements RealtimeSocket {
@@ -32,6 +35,15 @@ export class FakeRealtimeSocket implements RealtimeSocket {
   joinAckResolver?: (
     conversationId: string,
   ) => SocketAck<{ conversationId: string }>;
+  messageSendAckResolver?: (payload: {
+    conversationId: string;
+    content: string;
+    clientId?: string;
+  }) => SocketAck<{ message: Message; duplicate: boolean }> | "timeout";
+  messageReadAckResolver?: (payload: {
+    conversationId: string;
+    messageId: string;
+  }) => SocketAck<{ status: "ok" }> | "timeout";
 
   private listeners = new Map<ListenEvent, Set<StoredListener>>();
   private managerListeners = new Set<(attempt: number) => void>();
@@ -80,6 +92,51 @@ export class FakeRealtimeSocket implements RealtimeSocket {
     return this;
   }
 
+  timeout(timeoutMs: number): RealtimeTimeoutSocket {
+    const emitWithTimeout = ((
+      event: "message:send" | "message:read",
+      payload:
+        | { conversationId: string; content: string; clientId?: string }
+        | { conversationId: string; messageId: string },
+      ack: (err: Error | null, response?: unknown) => void,
+    ) => {
+      this.emitted.push({ event, args: [payload, ack], timeoutMs });
+
+      if (event === "message:send") {
+        const sendPayload = payload as {
+          conversationId: string;
+          content: string;
+          clientId?: string;
+        };
+        const result = this.messageSendAckResolver
+          ? this.messageSendAckResolver(sendPayload)
+          : "timeout";
+        if (result === "timeout") {
+          ack(new Error("operation has timed out"));
+        } else {
+          ack(null, result);
+        }
+        return this;
+      }
+
+      const readPayload = payload as {
+        conversationId: string;
+        messageId: string;
+      };
+      const result = this.messageReadAckResolver
+        ? this.messageReadAckResolver(readPayload)
+        : { status: "ok" as const, data: { status: "ok" as const } };
+      if (result === "timeout") {
+        ack(new Error("operation has timed out"));
+      } else {
+        ack(null, result);
+      }
+      return this;
+    }) as RealtimeTimeoutSocket["emit"];
+
+    return { emit: emitWithTimeout };
+  }
+
   on<E extends ListenEvent>(
     event: E,
     listener: RealtimeListenEventMap[E],
@@ -113,6 +170,30 @@ export class FakeRealtimeSocket implements RealtimeSocket {
           ? this.joinAckResolver(conversationId)
           : { status: "ok" as const, data: { conversationId } };
         ack(result);
+      }
+    }
+
+    if (event === "message:send") {
+      const [payload, ack] = args as Parameters<
+        ClientToServerEvents["message:send"]
+      >;
+      if (ack && this.messageSendAckResolver) {
+        const result = this.messageSendAckResolver(payload);
+        if (result !== "timeout") {
+          ack(result);
+        }
+      }
+    }
+
+    if (event === "message:read") {
+      const [payload, ack] = args as Parameters<
+        ClientToServerEvents["message:read"]
+      >;
+      if (ack && this.messageReadAckResolver) {
+        const result = this.messageReadAckResolver(payload);
+        if (result !== "timeout") {
+          ack(result);
+        }
       }
     }
 

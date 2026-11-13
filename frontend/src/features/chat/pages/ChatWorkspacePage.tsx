@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { cn } from "cn";
 import { conversationPath } from "@/app/routes";
+import { ConnectivityBanner } from "@/features/connection";
 import {
   ConversationsSidebar,
   NewConversationDialog,
@@ -17,8 +18,10 @@ export function ChatWorkspacePage() {
   const hasActiveConversation = Boolean(conversationId);
 
   return (
-    <div className="h-dvh w-full bg-background">
-      <div className="grid h-full w-full grid-cols-1 overflow-hidden bg-background md:grid-cols-[360px_1fr]">
+    <div className="flex h-dvh w-full flex-col bg-background">
+      <ConnectivityBanner />
+
+      <div className="grid min-h-0 w-full flex-1 grid-cols-1 overflow-hidden bg-background md:grid-cols-[360px_1fr]">
         <div
           className={cn(
             "min-h-0 flex-col",
