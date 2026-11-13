@@ -48,11 +48,10 @@ Create `backend/.env.secrets`:
 ```env
 NODE_ENV=development
 PORT=3000
+FRONTEND_URL=http://localhost:5173
 MONGODB_URI=mongodb://localhost:27017/mychat
-JWT_ACCESS_SECRET=your_super_secret_access_key_min_32_chars!
-JWT_REFRESH_SECRET=your_super_secret_refresh_key_min_32_chars!
-CLIENT_ORIGIN=http://localhost:5173
-COOKIE_DOMAIN=localhost
+ACCESS_TOKEN_SECRET=your_super_secret_access_key_min_32_chars!
+REFRESH_TOKEN_SECRET=your_super_secret_refresh_key_min_32_chars!
 ```
 
 Run both frontend and backend simultaneously with one command:
