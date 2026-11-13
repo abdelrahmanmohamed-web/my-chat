@@ -6,7 +6,6 @@ import { createMemoryRouter, RouterProvider } from "react-router";
 import { VirtuosoMockContext } from "react-virtuoso";
 import { AppProviders } from "@/app/providers";
 import { queryClient, QUERY_KEYS } from "@/app/query-client";
-import { appRoutes } from "@/app/router";
 import { useAuthStore, useConnectionStore } from "@/stores";
 import type { Message } from "@/types/messages";
 import { createFakeRealtimeSocket } from "./fake-socket";
@@ -19,12 +18,12 @@ import {
   TEST_USER,
 } from "./msw/fixtures";
 import { mswServer } from "./msw/server";
-import { renderAppAt } from "./render-app";
+import { eagerAppRoutes, renderAppAt } from "./render-app";
 
 describe("Phase 3 realtime & socket integration", () => {
   it("registers listeners cleanly under StrictMode and connects only when authenticated", async () => {
     const fakeSocket = createFakeRealtimeSocket();
-    const router = createMemoryRouter(appRoutes, {
+    const router = createMemoryRouter(eagerAppRoutes, {
       initialEntries: ["/login"],
     });
 

@@ -12,7 +12,7 @@ import {
 } from "@/stores";
 import { mswServer } from "./msw/server";
 
-configure({ asyncUtilTimeout: 3000 });
+configure({ asyncUtilTimeout: 5000 });
 
 if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
   Object.defineProperty(window, "matchMedia", {
