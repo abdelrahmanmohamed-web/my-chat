@@ -7,11 +7,10 @@ import { User } from "../modules/users/user.model.ts";
 import { Session } from "../modules/auth/sessions/session.model.ts";
 
 export async function connectMongoDB(): Promise<void> {
-  await mongoose.connect(env.mongoUri);
-  await Promise.all([
-    User.createIndexes(),
-    Session.createIndexes(),
-  ]);
+  await mongoose.connect(env.mongoUri, {
+    dbName: "online_chat",
+  });
+  await Promise.all([User.createIndexes(), Session.createIndexes()]);
 }
 
 export async function disconnectMongoDB(): Promise<void> {
