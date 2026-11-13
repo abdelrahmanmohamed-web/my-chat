@@ -107,7 +107,9 @@ describe("WebSocket Realtime Events (socket.events.ts)", () => {
     it("should reject join request if user is not participant", async () => {
       const clientC = await createClient(userC.token);
 
-      const res = await new Promise<SocketAckResponse<{ conversationId: string }>>((resolve) => {
+      const res = await new Promise<
+        SocketAckResponse<{ conversationId: string }>
+      >((resolve) => {
         clientC.emit("join:conversation", conversationId, (ack) => {
           resolve(ack);
         });
@@ -121,7 +123,9 @@ describe("WebSocket Realtime Events (socket.events.ts)", () => {
     it("should allow join request if user is participant", async () => {
       const clientA = await createClient(userA.token);
 
-      const res = await new Promise<SocketAckResponse<{ conversationId: string }>>((resolve) => {
+      const res = await new Promise<
+        SocketAckResponse<{ conversationId: string }>
+      >((resolve) => {
         clientA.emit("join:conversation", conversationId, (ack) => {
           resolve(ack);
         });
@@ -149,14 +153,21 @@ describe("WebSocket Realtime Events (socket.events.ts)", () => {
       });
 
       // Listen for message on User B
-      const messagePromise = new Promise<{ conversationId: string; message: { content: string } }>((resolve) => {
+      const messagePromise = new Promise<{
+        conversationId: string;
+        message: { content: string };
+      }>((resolve) => {
         clientB.on("message:new", (data) => {
-          resolve(data as { conversationId: string; message: { content: string } });
+          resolve(
+            data as { conversationId: string; message: { content: string } },
+          );
         });
       });
 
       // User A sends message
-      const ackRes = await new Promise<SocketAckResponse<{ message: { content: string }; duplicate: boolean }>>((resolve) => {
+      const ackRes = await new Promise<
+        SocketAckResponse<{ message: { content: string }; duplicate: boolean }>
+      >((resolve) => {
         clientA.emit(
           "message:send",
           {
@@ -164,7 +175,13 @@ describe("WebSocket Realtime Events (socket.events.ts)", () => {
             content: "Hello over WebSocket!",
             clientId: "ws-client-id-1",
           },
-          (ack) => resolve(ack as SocketAckResponse<{ message: { content: string }; duplicate: boolean }>),
+          (ack) =>
+            resolve(
+              ack as SocketAckResponse<{
+                message: { content: string };
+                duplicate: boolean;
+              }>,
+            ),
         );
       });
 
@@ -183,7 +200,9 @@ describe("WebSocket Realtime Events (socket.events.ts)", () => {
     it("should handle duplicate message submissions idempotently", async () => {
       const clientA = await createClient(userA.token);
 
-      const firstAck = await new Promise<SocketAckResponse<{ duplicate: boolean }>>((resolve) => {
+      const firstAck = await new Promise<
+        SocketAckResponse<{ duplicate: boolean }>
+      >((resolve) => {
         clientA.emit(
           "message:send",
           {
@@ -196,7 +215,9 @@ describe("WebSocket Realtime Events (socket.events.ts)", () => {
       });
       expect(firstAck.data?.duplicate).toBe(false);
 
-      const secondAck = await new Promise<SocketAckResponse<{ duplicate: boolean }>>((resolve) => {
+      const secondAck = await new Promise<
+        SocketAckResponse<{ duplicate: boolean }>
+      >((resolve) => {
         clientA.emit(
           "message:send",
           {
@@ -219,11 +240,18 @@ describe("WebSocket Realtime Events (socket.events.ts)", () => {
       const clientB = await createClient(userB.token);
 
       await Promise.all([
-        new Promise<void>((resolve) => clientA.emit("join:conversation", conversationId, () => resolve())),
-        new Promise<void>((resolve) => clientB.emit("join:conversation", conversationId, () => resolve())),
+        new Promise<void>((resolve) =>
+          clientA.emit("join:conversation", conversationId, () => resolve()),
+        ),
+        new Promise<void>((resolve) =>
+          clientB.emit("join:conversation", conversationId, () => resolve()),
+        ),
       ]);
 
-      const typingStartPromise = new Promise<{ userId: string; isTyping: boolean }>((resolve) => {
+      const typingStartPromise = new Promise<{
+        userId: string;
+        isTyping: boolean;
+      }>((resolve) => {
         clientB.on("user:typing", (data) => {
           if (data.isTyping) resolve(data);
         });
@@ -234,7 +262,10 @@ describe("WebSocket Realtime Events (socket.events.ts)", () => {
       expect(typingStartData.userId).toBe(userA.id);
       expect(typingStartData.isTyping).toBe(true);
 
-      const typingStopPromise = new Promise<{ userId: string; isTyping: boolean }>((resolve) => {
+      const typingStopPromise = new Promise<{
+        userId: string;
+        isTyping: boolean;
+      }>((resolve) => {
         clientB.on("user:typing", (data) => {
           if (!data.isTyping) resolve(data);
         });

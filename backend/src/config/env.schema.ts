@@ -4,11 +4,18 @@ import { z } from "zod";
  * Preprocesses string values from process.env into positive integers with a default fallback.
  */
 function positiveIntWithDefault(defaultValue: number) {
-  return z.preprocess((val) => {
-    if (val === undefined || val === null || val === "") return undefined;
-    const num = Number(val);
-    return Number.isSafeInteger(num) ? num : NaN;
-  }, z.number({ message: "Must be a valid integer" }).int("Must be an integer").positive("Must be a positive integer").default(defaultValue));
+  return z.preprocess(
+    (val) => {
+      if (val === undefined || val === null || val === "") return undefined;
+      const num = Number(val);
+      return Number.isSafeInteger(num) ? num : NaN;
+    },
+    z
+      .number({ message: "Must be a valid integer" })
+      .int("Must be an integer")
+      .positive("Must be a positive integer")
+      .default(defaultValue),
+  );
 }
 
 /**
@@ -17,8 +24,9 @@ function positiveIntWithDefault(defaultValue: number) {
 export const envSchema = z
   .object({
     NODE_ENV: z.preprocess(
-      (val) => (val === undefined || val === null || val === "" ? undefined : val),
-      z.enum(["development", "test", "production"]).default("development")
+      (val) =>
+        val === undefined || val === null || val === "" ? undefined : val,
+      z.enum(["development", "test", "production"]).default("development"),
     ),
 
     PORT: positiveIntWithDefault(3000),
@@ -28,10 +36,12 @@ export const envSchema = z
       .trim()
       .min(1, "MONGODB_URI cannot be empty")
       .refine(
-        (uri) => uri.startsWith("mongodb://") || uri.startsWith("mongodb+srv://"),
+        (uri) =>
+          uri.startsWith("mongodb://") || uri.startsWith("mongodb+srv://"),
         {
-          message: "MONGODB_URI must start with 'mongodb://' or 'mongodb+srv://'",
-        }
+          message:
+            "MONGODB_URI must start with 'mongodb://' or 'mongodb+srv://'",
+        },
       ),
 
     ACCESS_TOKEN_SECRET: z
@@ -43,31 +53,42 @@ export const envSchema = z
       .min(32, "REFRESH_TOKEN_SECRET must be at least 32 characters"),
 
     FRONTEND_URL: z.preprocess(
-      (val) => (val === undefined || val === null || val === "" ? undefined : val),
-      z.string().url("FRONTEND_URL must be a valid URL").default("http://localhost:5173")
+      (val) =>
+        val === undefined || val === null || val === "" ? undefined : val,
+      z
+        .string()
+        .url("FRONTEND_URL must be a valid URL")
+        .default("http://localhost:5173"),
     ),
 
     JWT_ISSUER: z.preprocess(
-      (val) => (val === undefined || val === null || val === "" ? undefined : val),
-      z.string().min(1, "JWT_ISSUER cannot be empty").default("my-chat-api")
+      (val) =>
+        val === undefined || val === null || val === "" ? undefined : val,
+      z.string().min(1, "JWT_ISSUER cannot be empty").default("my-chat-api"),
     ),
 
     JWT_AUDIENCE: z.preprocess(
-      (val) => (val === undefined || val === null || val === "" ? undefined : val),
-      z.string().min(1, "JWT_AUDIENCE cannot be empty").default("my-chat-clients")
+      (val) =>
+        val === undefined || val === null || val === "" ? undefined : val,
+      z
+        .string()
+        .min(1, "JWT_AUDIENCE cannot be empty")
+        .default("my-chat-clients"),
     ),
 
     LOG_LEVEL: z.preprocess(
-      (val) => (val === undefined || val === null || val === "" ? undefined : val),
+      (val) =>
+        val === undefined || val === null || val === "" ? undefined : val,
       z
         .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
-        .default("info")
+        .default("info"),
     ),
 
     TRUST_PROXY: z
       .preprocess(
-        (val) => (val === undefined || val === null || val === "" ? undefined : val),
-        z.string().optional()
+        (val) =>
+          val === undefined || val === null || val === "" ? undefined : val,
+        z.string().optional(),
       )
       .refine((val) => val === undefined || /^\d+$/.test(val), {
         message: "TRUST_PROXY must be a non-negative integer",
@@ -84,27 +105,18 @@ export const envSchema = z
 
     AUTH_REFRESH_RATE_LIMIT: positiveIntWithDefault(30),
   })
-  .refine(
-    (data) => Buffer.byteLength(data.ACCESS_TOKEN_SECRET ?? "") >= 32,
-    {
-      message: "ACCESS_TOKEN_SECRET must be at least 32 bytes in length",
-      path: ["ACCESS_TOKEN_SECRET"],
-    }
-  )
-  .refine(
-    (data) => Buffer.byteLength(data.REFRESH_TOKEN_SECRET ?? "") >= 32,
-    {
-      message: "REFRESH_TOKEN_SECRET must be at least 32 bytes in length",
-      path: ["REFRESH_TOKEN_SECRET"],
-    }
-  )
-  .refine(
-    (data) => data.ACCESS_TOKEN_SECRET !== data.REFRESH_TOKEN_SECRET,
-    {
-      message: "REFRESH_TOKEN_SECRET must differ from ACCESS_TOKEN_SECRET",
-      path: ["REFRESH_TOKEN_SECRET"],
-    }
-  );
+  .refine((data) => Buffer.byteLength(data.ACCESS_TOKEN_SECRET ?? "") >= 32, {
+    message: "ACCESS_TOKEN_SECRET must be at least 32 bytes in length",
+    path: ["ACCESS_TOKEN_SECRET"],
+  })
+  .refine((data) => Buffer.byteLength(data.REFRESH_TOKEN_SECRET ?? "") >= 32, {
+    message: "REFRESH_TOKEN_SECRET must be at least 32 bytes in length",
+    path: ["REFRESH_TOKEN_SECRET"],
+  })
+  .refine((data) => data.ACCESS_TOKEN_SECRET !== data.REFRESH_TOKEN_SECRET, {
+    message: "REFRESH_TOKEN_SECRET must differ from ACCESS_TOKEN_SECRET",
+    path: ["REFRESH_TOKEN_SECRET"],
+  });
 
 export type ValidatedEnv = z.infer<typeof envSchema>;
 
@@ -123,7 +135,7 @@ export function formatEnvIssues(issues: z.ZodIssue[]): string[] {
  * Throws a formatted Error if validation fails.
  */
 export function validateEnv(
-  source: Record<string, unknown> = process.env
+  source: Record<string, unknown> = process.env,
 ): ValidatedEnv {
   const result = envSchema.safeParse(source);
 

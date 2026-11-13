@@ -14,26 +14,35 @@ Using smooth scrolling over many items can kill performance and potentially clas
 :::
 
 ```tsx live
-import { Virtuoso } from 'react-virtuoso'
-import { useState, useRef } from 'react'
+import { Virtuoso } from "react-virtuoso";
+import { useState, useRef } from "react";
 
 export default function App() {
-  const [align, setAlign] = useState('start')
-  const [behavior, setBehavior] = useState('auto')
-  const virtuoso = useRef(null)
+  const [align, setAlign] = useState("start");
+  const [behavior, setBehavior] = useState("auto");
+  const virtuoso = useRef(null);
   return (
     <div>
-      <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'row', gap: 5, alignItems: 'baseline', flexWrap: 'wrap' }}>
+      <ul
+        style={{
+          listStyle: "none",
+          display: "flex",
+          flexDirection: "row",
+          gap: 5,
+          alignItems: "baseline",
+          flexWrap: "wrap",
+        }}
+      >
         <li>
           <button
-            style={{ whiteSpace: 'nowrap' }}
+            style={{ whiteSpace: "nowrap" }}
             onClick={() => {
               virtuoso.current.scrollToIndex({
                 index: 0,
                 align,
                 behavior,
-              })
-              return false
+              });
+              return false;
             }}
           >
             Go to 1
@@ -41,14 +50,14 @@ export default function App() {
         </li>
         <li>
           <button
-            style={{ whiteSpace: 'nowrap' }}
+            style={{ whiteSpace: "nowrap" }}
             onClick={() => {
               virtuoso.current.scrollToIndex({
                 index: 499,
                 align,
                 behavior,
-              })
-              return false
+              });
+              return false;
             }}
           >
             Go to 500
@@ -56,14 +65,14 @@ export default function App() {
         </li>
         <li>
           <button
-            style={{ whiteSpace: 'nowrap' }}
+            style={{ whiteSpace: "nowrap" }}
             onClick={() => {
               virtuoso.current.scrollToIndex({
                 index: 999,
                 align,
                 behavior,
-              })
-              return false
+              });
+              return false;
             }}
           >
             Go to 1000
@@ -82,7 +91,10 @@ export default function App() {
         <li>
           <label>
             Behavior:
-            <select value={behavior} onChange={(e) => setBehavior(e.target.value)}>
+            <select
+              value={behavior}
+              onChange={(e) => setBehavior(e.target.value)}
+            >
               <option value="auto">Instant (auto)</option>
               <option value="smooth">Smooth</option>
             </select>
@@ -91,9 +103,15 @@ export default function App() {
       </ul>
 
       <div style={{ height: 300 }}>
-        <Virtuoso totalCount={1000} ref={virtuoso} itemContent={(index) => <div style={{ height: 30 }}>Item {index + 1}</div>} />
+        <Virtuoso
+          totalCount={1000}
+          ref={virtuoso}
+          itemContent={(index) => (
+            <div style={{ height: 30 }}>Item {index + 1}</div>
+          )}
+        />
       </div>
     </div>
-  )
+  );
 }
 ```

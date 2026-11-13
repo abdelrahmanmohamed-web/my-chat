@@ -10,8 +10,15 @@ import { Router } from "express";
 
 import { Conversation } from "../conversations/conversation.model.ts";
 import { getSocketServer } from "../../infrastructure/socket.ts";
-import { listMessages, markMessageAsRead, sendMessage } from "./message.service.ts";
-import { listMessagesQuerySchema, sendMessageSchema } from "./message.schemas.ts";
+import {
+  listMessages,
+  markMessageAsRead,
+  sendMessage,
+} from "./message.service.ts";
+import {
+  listMessagesQuerySchema,
+  sendMessageSchema,
+} from "./message.schemas.ts";
 
 export const messageRouter = Router({ mergeParams: true });
 
@@ -73,7 +80,10 @@ messageRouter.post("/", async (req, res, next) => {
         message: result.message,
       });
 
-      const conv = await Conversation.findById(conversationId, "participantIds");
+      const conv = await Conversation.findById(
+        conversationId,
+        "participantIds",
+      );
       if (conv?.participantIds) {
         for (const pId of conv.participantIds) {
           io.to(`user:${pId.toString()}`).emit("message:new", {

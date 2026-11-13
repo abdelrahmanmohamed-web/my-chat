@@ -5,7 +5,10 @@ import { connectTestDB, disconnectTestDB, clearTestDB } from "../helpers/db.ts";
 import { User } from "../../src/modules/users/user.model.ts";
 import { Conversation } from "../../src/modules/conversations/conversation.model.ts";
 import { Message } from "../../src/modules/messages/message.model.ts";
-import { sendMessage, listMessages } from "../../src/modules/messages/message.service.ts";
+import {
+  sendMessage,
+  listMessages,
+} from "../../src/modules/messages/message.service.ts";
 
 describe("Message Service (message.service.ts)", () => {
   let userAId: string;

@@ -160,10 +160,13 @@ export async function rotateSessionToken(
     return { status: "invalid" };
   }
 
-
   const session = await Session.findById(payload.sid);
 
-  if (!session || session.userId.toString() !== payload.userId || session.expiresAt <= new Date()) {
+  if (
+    !session ||
+    session.userId.toString() !== payload.userId ||
+    session.expiresAt <= new Date()
+  ) {
     return { status: "invalid" };
   }
 

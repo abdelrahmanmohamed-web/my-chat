@@ -47,27 +47,32 @@ Move the components outside. If you need to capture a certain state in them, use
 ## Example with @emotion/styled
 
 ```tsx
-import styled from '@emotion/styled'
-import React from 'react'
-import { Virtuoso } from 'react-virtuoso'
+import styled from "@emotion/styled";
+import React from "react";
+import { Virtuoso } from "react-virtuoso";
 
 const Item = styled.div`
   border: 2px solid red;
-`
+`;
 const ListEl = styled.div`
   border: 1px solid blue;
-`
-const Header = () => 'Header'
-const Footer = () => 'Footer'
+`;
+const Header = () => "Header";
+const Footer = () => "Footer";
 
 const List = React.forwardRef((props, ref) => {
-  return <ListEl {...props} ref={ref} />
-})
+  return <ListEl {...props} ref={ref} />;
+});
 
 export default function App() {
   return (
-    <Virtuoso style={{ height: '100%' }} components={{ Item, List, Header, Footer }} totalCount={30} itemContent={(idx) => `Item ${idx}`} />
-  )
+    <Virtuoso
+      style={{ height: "100%" }}
+      components={{ Item, List, Header, Footer }}
+      totalCount={30}
+      itemContent={(idx) => `Item ${idx}`}
+    />
+  );
 }
 ```
 
@@ -76,13 +81,15 @@ export default function App() {
 The types for each component are available in the `Components` interface. The example below annotates the `Scroller` custom component:
 
 ```tsx
-import { Components } from 'react-virtuoso'
+import { Components } from "react-virtuoso";
 
-const Scroller: Components['Scroller'] = React.forwardRef(({ style, children }, ref) => {
-  return (
-    <div style={style} ref={ref}>
-      {children}
-    </div>
-  )
-})
+const Scroller: Components["Scroller"] = React.forwardRef(
+  ({ style, children }, ref) => {
+    return (
+      <div style={style} ref={ref}>
+        {children}
+      </div>
+    );
+  },
+);
 ```

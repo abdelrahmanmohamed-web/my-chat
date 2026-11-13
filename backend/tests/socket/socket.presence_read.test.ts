@@ -119,8 +119,12 @@ describe("WebSocket Read Receipts & Scoped Presence (socket.presence_read.test.t
       const clientB = await createClient(userB.token);
 
       await Promise.all([
-        new Promise<void>((res) => clientA.emit("join:conversation", conversationId, () => res())),
-        new Promise<void>((res) => clientB.emit("join:conversation", conversationId, () => res())),
+        new Promise<void>((res) =>
+          clientA.emit("join:conversation", conversationId, () => res()),
+        ),
+        new Promise<void>((res) =>
+          clientB.emit("join:conversation", conversationId, () => res()),
+        ),
       ]);
 
       const readPromise = new Promise<{
@@ -132,16 +136,18 @@ describe("WebSocket Read Receipts & Scoped Presence (socket.presence_read.test.t
       });
 
       // User B reads User A's message
-      const ackRes = await new Promise<SocketAckResponse<{ status: "ok" }>>((resolve) => {
-        clientB.emit(
-          "message:read",
-          {
-            conversationId,
-            messageId,
-          },
-          (ack) => resolve(ack as SocketAckResponse<{ status: "ok" }>),
-        );
-      });
+      const ackRes = await new Promise<SocketAckResponse<{ status: "ok" }>>(
+        (resolve) => {
+          clientB.emit(
+            "message:read",
+            {
+              conversationId,
+              messageId,
+            },
+            (ack) => resolve(ack as SocketAckResponse<{ status: "ok" }>),
+          );
+        },
+      );
 
       expect(ackRes.status).toBe("ok");
 
@@ -162,16 +168,18 @@ describe("WebSocket Read Receipts & Scoped Presence (socket.presence_read.test.t
     it("should reject message:read if user is not participant in conversation", async () => {
       const clientC = await createClient(userC.token);
 
-      const ackRes = await new Promise<SocketAckResponse<{ status: "ok" }>>((resolve) => {
-        clientC.emit(
-          "message:read",
-          {
-            conversationId,
-            messageId,
-          },
-          (ack) => resolve(ack as SocketAckResponse<{ status: "ok" }>),
-        );
-      });
+      const ackRes = await new Promise<SocketAckResponse<{ status: "ok" }>>(
+        (resolve) => {
+          clientC.emit(
+            "message:read",
+            {
+              conversationId,
+              messageId,
+            },
+            (ack) => resolve(ack as SocketAckResponse<{ status: "ok" }>),
+          );
+        },
+      );
 
       expect(ackRes.status).toBe("error");
       clientC.close();
@@ -189,7 +197,10 @@ describe("WebSocket Read Receipts & Scoped Presence (socket.presence_read.test.t
         userCReceivedStatus = true;
       });
 
-      const userBOnlinePromise = new Promise<{ userId: string; status: string }>((resolve) => {
+      const userBOnlinePromise = new Promise<{
+        userId: string;
+        status: string;
+      }>((resolve) => {
         clientB.on("user:status", (data) => {
           if (data.userId === userA.id && data.status === "online") {
             resolve(data);
@@ -208,7 +219,10 @@ describe("WebSocket Read Receipts & Scoped Presence (socket.presence_read.test.t
       await new Promise((r) => setTimeout(r, 50));
       expect(userCReceivedStatus).toBe(false);
 
-      const userBOfflinePromise = new Promise<{ userId: string; status: string }>((resolve) => {
+      const userBOfflinePromise = new Promise<{
+        userId: string;
+        status: string;
+      }>((resolve) => {
         clientB.on("user:status", (data) => {
           if (data.userId === userA.id && data.status === "offline") {
             resolve(data);

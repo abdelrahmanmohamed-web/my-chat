@@ -10,13 +10,13 @@ The `GroupedTableVirtuoso` component supports grouping of rows, similar to `Grou
 ## Table with grouped rows
 
 ```tsx live
-import { GroupedTableVirtuoso } from 'react-virtuoso'
-import { useMemo } from 'react'
+import { GroupedTableVirtuoso } from "react-virtuoso";
+import { useMemo } from "react";
 
 export default function App() {
   const groupCounts = useMemo(() => {
-    return Array(10).fill(10)
-  }, [])
+    return Array(10).fill(10);
+  }, []);
 
   const users = useMemo(() => {
     return groupCounts.flatMap((count, index) =>
@@ -24,27 +24,27 @@ export default function App() {
         name: `User ${index * count + i}`,
         description: `Description for user ${index * count + i}`,
         group: index,
-      }))
-    )
-  }, [groupCounts])
+      })),
+    );
+  }, [groupCounts]);
 
   return (
     <GroupedTableVirtuoso
-      style={{ height: '100%', background: 'whitesmoke' }}
+      style={{ height: "100%", background: "whitesmoke" }}
       groupCounts={groupCounts}
       fixedHeaderContent={() => (
-        <tr style={{ background: 'var(--background)' }}>
+        <tr style={{ background: "var(--background)" }}>
           <th style={{ width: 150 }}>Name</th>
           <th>Description</th>
         </tr>
       )}
       groupContent={(index) => (
-        <td colSpan={2} style={{ backgroundColor: 'var(--background)' }}>
+        <td colSpan={2} style={{ backgroundColor: "var(--background)" }}>
           Group {index}
         </td>
       )}
       itemContent={(index, groupIndex) => {
-        const user = users[index]
+        const user = users[index];
         return (
           <>
             <td style={{ width: 150 }}>
@@ -52,9 +52,9 @@ export default function App() {
             </td>
             <td>{user.description}</td>
           </>
-        )
+        );
       }}
     />
-  )
+  );
 }
 ```

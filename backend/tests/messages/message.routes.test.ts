@@ -147,20 +147,17 @@ describe("Message HTTP Routes (/api/conversations/:id/messages)", () => {
     });
 
     it("should return 200 OK for duplicate clientId submission", async () => {
-      await fetch(
-        `${baseUrl}/api/conversations/${conversationId}/messages`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${userA.token}`,
-          },
-          body: JSON.stringify({
-            content: "Original message",
-            clientId: "dup-client-id",
-          }),
+      await fetch(`${baseUrl}/api/conversations/${conversationId}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userA.token}`,
         },
-      );
+        body: JSON.stringify({
+          content: "Original message",
+          clientId: "dup-client-id",
+        }),
+      });
 
       const res = await fetch(
         `${baseUrl}/api/conversations/${conversationId}/messages`,
@@ -199,17 +196,14 @@ describe("Message HTTP Routes (/api/conversations/:id/messages)", () => {
     it("should return paginated message history", async () => {
       // Seed 3 messages
       for (const text of ["First", "Second", "Third"]) {
-        await fetch(
-          `${baseUrl}/api/conversations/${conversationId}/messages`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${userA.token}`,
-            },
-            body: JSON.stringify({ content: text }),
+        await fetch(`${baseUrl}/api/conversations/${conversationId}/messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userA.token}`,
           },
-        );
+          body: JSON.stringify({ content: text }),
+        });
       }
 
       const res = await fetch(

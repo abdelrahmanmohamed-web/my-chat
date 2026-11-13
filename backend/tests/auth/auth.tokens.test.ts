@@ -21,7 +21,12 @@ describe("Auth Tokens Service (auth.tokens.ts)", () => {
   describe("createAccessToken", () => {
     it("should issue a valid signed JWT containing correct claims", async () => {
       const ttl = 60; // 60 seconds
-      const token = await createAccessToken(dummyUserId, dummySid, dummyTokenId, ttl);
+      const token = await createAccessToken(
+        dummyUserId,
+        dummySid,
+        dummyTokenId,
+        ttl,
+      );
 
       expect(typeof token).toBe("string");
       expect(token.split(".")).toHaveLength(3);
@@ -41,8 +46,15 @@ describe("Auth Tokens Service (auth.tokens.ts)", () => {
     });
 
     it("should reject verification if verified with a different secret", async () => {
-      const token = await createAccessToken(dummyUserId, dummySid, dummyTokenId, 60);
-      const wrongSecret = new TextEncoder().encode("wrong-secret-key-that-is-at-least-32-chars");
+      const token = await createAccessToken(
+        dummyUserId,
+        dummySid,
+        dummyTokenId,
+        60,
+      );
+      const wrongSecret = new TextEncoder().encode(
+        "wrong-secret-key-that-is-at-least-32-chars",
+      );
 
       await expect(
         jwtVerify(token, wrongSecret, {
@@ -58,7 +70,12 @@ describe("Auth Tokens Service (auth.tokens.ts)", () => {
     it("should issue a valid signed refresh token containing version and sid", async () => {
       const version = 3;
       const ttl = 3600;
-      const token = await createRefreshToken(dummyUserId, dummySid, version, ttl);
+      const token = await createRefreshToken(
+        dummyUserId,
+        dummySid,
+        version,
+        ttl,
+      );
 
       expect(typeof token).toBe("string");
 

@@ -23,7 +23,10 @@ export interface SocketAckResponse<T = unknown> {
 
 // Events emitted by the server and listened to by clients
 export interface ServerToClientEvents {
-  "message:new": (payload: { conversationId: string; message: unknown }) => void;
+  "message:new": (payload: {
+    conversationId: string;
+    message: unknown;
+  }) => void;
   "message:read_update": (payload: {
     conversationId: string;
     userId: string;

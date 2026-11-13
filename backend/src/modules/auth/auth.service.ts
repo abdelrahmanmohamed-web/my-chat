@@ -16,10 +16,7 @@ import mongoose from "mongoose";
 
 import { ACCESS_TOKEN_TTL_SECONDS } from "../../config/auth-config.ts";
 import { User } from "../users/index.ts";
-import type {
-  CredentialsInput,
-  RegistrationInput,
-} from "./auth.schemas.ts";
+import type { CredentialsInput, RegistrationInput } from "./auth.schemas.ts";
 import { Session } from "./sessions/session.model.ts";
 import {
   createSession,
@@ -30,9 +27,12 @@ import {
 } from "./sessions/session.service.ts";
 
 // Pre-computed hash used to equalize login timing when the email does not exist.
-const DUMMY_PASSWORD_HASH = argon2.hash("dummy-password-for-timing-equalization", {
-  type: argon2.argon2id,
-});
+const DUMMY_PASSWORD_HASH = argon2.hash(
+  "dummy-password-for-timing-equalization",
+  {
+    type: argon2.argon2id,
+  },
+);
 
 // ============================================================================
 // Types & Interfaces
@@ -95,10 +95,7 @@ export function toPublicUser(user: PublicUserSource) {
  */
 export async function register(input: RegistrationInput) {
   const existingUser = await User.findOne({
-    $or: [
-      { email: input.email.toLowerCase() },
-      { username: input.username },
-    ],
+    $or: [{ email: input.email.toLowerCase() }, { username: input.username }],
   });
 
   if (existingUser) {

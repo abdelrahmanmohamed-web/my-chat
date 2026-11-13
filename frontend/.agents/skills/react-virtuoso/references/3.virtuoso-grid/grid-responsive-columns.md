@@ -20,8 +20,8 @@ You can safely use media queries, `min-width`, percentages, etc. in the item lay
 The grid observes the container/item dimensions and recalculates the scroll size accordingly. The example below uses inline styling, but you can easily put the styles in a stylesheet and change the item sizes with media queries.
 
 ```tsx live
-import { VirtuosoGrid } from 'react-virtuoso'
-import { forwardRef } from 'react'
+import { VirtuosoGrid } from "react-virtuoso";
+import { forwardRef } from "react";
 
 // Ensure that this stays out of the component,
 // Otherwise the grid will remount with each render due to new component instances.
@@ -31,8 +31,8 @@ const gridComponents = {
       ref={ref}
       {...props}
       style={{
-        display: 'flex',
-        flexWrap: 'wrap',
+        display: "flex",
+        flexWrap: "wrap",
         ...style,
       }}
     >
@@ -43,34 +43,34 @@ const gridComponents = {
     <div
       {...props}
       style={{
-        padding: '0.5rem',
-        width: '33%',
-        display: 'flex',
-        flex: 'none',
-        alignContent: 'stretch',
-        boxSizing: 'border-box',
+        padding: "0.5rem",
+        width: "33%",
+        display: "flex",
+        flex: "none",
+        alignContent: "stretch",
+        boxSizing: "border-box",
       }}
     >
       {children}
     </div>
   ),
-}
+};
 
 const ItemWrapper = ({ children, ...props }) => (
   <div
     {...props}
     style={{
-      display: 'flex',
+      display: "flex",
       flex: 1,
-      textAlign: 'center',
-      padding: '1rem 1rem',
-      border: '1px solid gray',
-      whiteSpace: 'nowrap',
+      textAlign: "center",
+      padding: "1rem 1rem",
+      border: "1px solid gray",
+      whiteSpace: "nowrap",
     }}
   >
     {children}
   </div>
-)
+);
 
 export default function App() {
   return (
@@ -83,6 +83,6 @@ export default function App() {
       />
       <style>{`html, body, #root { margin: 0; padding: 0 }`}</style>
     </>
-  )
+  );
 }
 ```

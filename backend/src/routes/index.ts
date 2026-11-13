@@ -13,7 +13,11 @@
 
 import { Router } from "express";
 
-import { authRouter, requireAuth, sessionRouter } from "../modules/auth/index.ts";
+import {
+  authRouter,
+  requireAuth,
+  sessionRouter,
+} from "../modules/auth/index.ts";
 import {
   conversationRouter,
   userSearchRouter,

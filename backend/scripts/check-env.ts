@@ -41,7 +41,7 @@ function run(): void {
     console.error("❌ [env-check] ENVIRONMENT VALIDATION FAILED");
     console.error("=======================================================");
     console.error(
-      "The following environment variables or secrets are missing or invalid:\n"
+      "The following environment variables or secrets are missing or invalid:\n",
     );
 
     const issues = formatEnvIssues(parseResult.error.issues);
@@ -49,7 +49,9 @@ function run(): void {
       console.error(issue);
     }
 
-    console.error("\nℹ️  Please update your .env.secrets or .env file before building.");
+    console.error(
+      "\nℹ️  Please update your .env.secrets or .env file before building.",
+    );
     console.error("=======================================================\n");
 
     process.exit(1);

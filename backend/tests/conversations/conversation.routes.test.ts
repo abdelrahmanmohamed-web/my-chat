@@ -244,7 +244,12 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
 
       expect(res.status).toBe(201);
       const body = (await res.json()) as {
-        conversation: { _id: string; type: string; participantIds: string[]; name: string };
+        conversation: {
+          _id: string;
+          type: string;
+          participantIds: string[];
+          name: string;
+        };
       };
       expect(body.conversation._id).toBeDefined();
       expect(body.conversation.type).toBe("direct");
@@ -301,9 +306,12 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
 
   describe("POST /api/conversations/:id/hide", () => {
     it("should return 401 Unauthorized if not authenticated", async () => {
-      const res = await fetch(`${baseUrl}/api/conversations/507f1f77bcf86cd799439011/hide`, {
-        method: "POST",
-      });
+      const res = await fetch(
+        `${baseUrl}/api/conversations/507f1f77bcf86cd799439011/hide`,
+        {
+          method: "POST",
+        },
+      );
       expect(res.status).toBe(401);
     });
 
@@ -317,13 +325,18 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
         },
         body: JSON.stringify({ participantId: userB.id }),
       });
-      const conv = ((await createRes.json()) as { conversation: { _id: string } }).conversation;
+      const conv = (
+        (await createRes.json()) as { conversation: { _id: string } }
+      ).conversation;
 
       // User C attempts to hide it -> 404
-      const hideRes = await fetch(`${baseUrl}/api/conversations/${conv._id}/hide`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${userC.token}` },
-      });
+      const hideRes = await fetch(
+        `${baseUrl}/api/conversations/${conv._id}/hide`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${userC.token}` },
+        },
+      );
       expect(hideRes.status).toBe(404);
     });
 
@@ -337,13 +350,18 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
         },
         body: JSON.stringify({ participantId: userB.id }),
       });
-      const conv = ((await createRes.json()) as { conversation: { _id: string } }).conversation;
+      const conv = (
+        (await createRes.json()) as { conversation: { _id: string } }
+      ).conversation;
 
       // User A hides it -> 204
-      const hideRes = await fetch(`${baseUrl}/api/conversations/${conv._id}/hide`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${userA.token}` },
-      });
+      const hideRes = await fetch(
+        `${baseUrl}/api/conversations/${conv._id}/hide`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${userA.token}` },
+        },
+      );
       expect(hideRes.status).toBe(204);
 
       // User A no longer sees it in their list
@@ -364,23 +382,29 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
 
   describe("PATCH /api/conversations/:id", () => {
     it("should return 401 Unauthorized if not authenticated", async () => {
-      const res = await fetch(`${baseUrl}/api/conversations/507f1f77bcf86cd799439011`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Updated" }),
-      });
+      const res = await fetch(
+        `${baseUrl}/api/conversations/507f1f77bcf86cd799439011`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "Updated" }),
+        },
+      );
       expect(res.status).toBe(401);
     });
 
     it("should return 400 Bad Request if neither name nor avatarUrl is supplied", async () => {
-      const res = await fetch(`${baseUrl}/api/conversations/507f1f77bcf86cd799439011`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${userA.token}`,
+      const res = await fetch(
+        `${baseUrl}/api/conversations/507f1f77bcf86cd799439011`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userA.token}`,
+          },
+          body: JSON.stringify({}),
         },
-        body: JSON.stringify({}),
-      });
+      );
 
       expect(res.status).toBe(400);
       const body = (await res.json()) as { error: string };
@@ -396,17 +420,22 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
         },
         body: JSON.stringify({ participantId: userB.id }),
       });
-      const conv = ((await createRes.json()) as { conversation: { _id: string } }).conversation;
+      const conv = (
+        (await createRes.json()) as { conversation: { _id: string } }
+      ).conversation;
 
       // User C attempts update
-      const updateRes = await fetch(`${baseUrl}/api/conversations/${conv._id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${userC.token}`,
+      const updateRes = await fetch(
+        `${baseUrl}/api/conversations/${conv._id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userC.token}`,
+          },
+          body: JSON.stringify({ name: "Intruder Update" }),
         },
-        body: JSON.stringify({ name: "Intruder Update" }),
-      });
+      );
 
       expect(updateRes.status).toBe(404);
     });
@@ -420,26 +449,33 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
         },
         body: JSON.stringify({ participantId: userB.id }),
       });
-      const conv = ((await createRes.json()) as { conversation: { _id: string } }).conversation;
+      const conv = (
+        (await createRes.json()) as { conversation: { _id: string } }
+      ).conversation;
 
-      const updateRes = await fetch(`${baseUrl}/api/conversations/${conv._id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${userA.token}`,
+      const updateRes = await fetch(
+        `${baseUrl}/api/conversations/${conv._id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userA.token}`,
+          },
+          body: JSON.stringify({
+            name: "Project Planning Group",
+            avatarUrl: "https://example.com/avatar.jpg",
+          }),
         },
-        body: JSON.stringify({
-          name: "Project Planning Group",
-          avatarUrl: "https://example.com/avatar.jpg",
-        }),
-      });
+      );
 
       expect(updateRes.status).toBe(200);
       const body = (await updateRes.json()) as {
         conversation: { name: string; avatarUrl: string };
       };
       expect(body.conversation.name).toBe("Project Planning Group");
-      expect(body.conversation.avatarUrl).toBe("https://example.com/avatar.jpg");
+      expect(body.conversation.avatarUrl).toBe(
+        "https://example.com/avatar.jpg",
+      );
     });
   });
 });

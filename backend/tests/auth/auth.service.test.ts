@@ -81,7 +81,9 @@ describe("Auth Service (auth.service.ts)", () => {
       expect(dbUser).not.toBeNull();
       expect(dbUser?.passwordHash).toBeDefined();
       expect(dbUser?.passwordHash).not.toBe(validRegistration.password);
-      expect(await argon2.verify(dbUser!.passwordHash, validRegistration.password)).toBe(true);
+      expect(
+        await argon2.verify(dbUser!.passwordHash, validRegistration.password),
+      ).toBe(true);
     });
 
     it("should throw a duplicate error (code 11000) when email is already taken", async () => {
@@ -157,15 +159,26 @@ describe("Auth Service (auth.service.ts)", () => {
       expect(result.user.email).toBe("bob@example.com");
 
       // Verify session exists in DB
-      const sessionCount = await Session.countDocuments({ userId: result.user.id });
+      const sessionCount = await Session.countDocuments({
+        userId: result.user.id,
+      });
       expect(sessionCount).toBe(1);
     });
 
     it("should return max_reached (409 logic) when user reaches max sessions limit (default 3)", async () => {
       // Create 3 active sessions
-      const s1 = await login({ email: registrationData.email, password: registrationData.password }, { device: "Dev1" });
-      const s2 = await login({ email: registrationData.email, password: registrationData.password }, { device: "Dev2" });
-      const s3 = await login({ email: registrationData.email, password: registrationData.password }, { device: "Dev3" });
+      const s1 = await login(
+        { email: registrationData.email, password: registrationData.password },
+        { device: "Dev1" },
+      );
+      const s2 = await login(
+        { email: registrationData.email, password: registrationData.password },
+        { device: "Dev2" },
+      );
+      const s3 = await login(
+        { email: registrationData.email, password: registrationData.password },
+        { device: "Dev3" },
+      );
 
       expect(s1.status).toBe("ok");
       expect(s2.status).toBe("ok");
@@ -173,7 +186,11 @@ describe("Auth Service (auth.service.ts)", () => {
 
       // 4th login attempt without revokeSessionId
       const attempt4 = await login(
-        { email: registrationData.email, password: registrationData.password, device: "Dev4" },
+        {
+          email: registrationData.email,
+          password: registrationData.password,
+          device: "Dev4",
+        },
         {},
       );
 
@@ -184,12 +201,25 @@ describe("Auth Service (auth.service.ts)", () => {
     });
 
     it("should allow 4th login if revokeSessionId is set to a specific session ID", async () => {
-      await login({ email: registrationData.email, password: registrationData.password }, { device: "Dev1" });
-      await login({ email: registrationData.email, password: registrationData.password }, { device: "Dev2" });
-      await login({ email: registrationData.email, password: registrationData.password }, { device: "Dev3" });
+      await login(
+        { email: registrationData.email, password: registrationData.password },
+        { device: "Dev1" },
+      );
+      await login(
+        { email: registrationData.email, password: registrationData.password },
+        { device: "Dev2" },
+      );
+      await login(
+        { email: registrationData.email, password: registrationData.password },
+        { device: "Dev3" },
+      );
 
       const conflictRes = await login(
-        { email: registrationData.email, password: registrationData.password, device: "Dev4" },
+        {
+          email: registrationData.email,
+          password: registrationData.password,
+          device: "Dev4",
+        },
         {},
       );
       expect(conflictRes.status).toBe("max_reached");
@@ -216,9 +246,18 @@ describe("Auth Service (auth.service.ts)", () => {
     });
 
     it("should allow 4th login and revoke all sessions if revokeSessionId='all'", async () => {
-      await login({ email: registrationData.email, password: registrationData.password }, { device: "Dev1" });
-      await login({ email: registrationData.email, password: registrationData.password }, { device: "Dev2" });
-      await login({ email: registrationData.email, password: registrationData.password }, { device: "Dev3" });
+      await login(
+        { email: registrationData.email, password: registrationData.password },
+        { device: "Dev1" },
+      );
+      await login(
+        { email: registrationData.email, password: registrationData.password },
+        { device: "Dev2" },
+      );
+      await login(
+        { email: registrationData.email, password: registrationData.password },
+        { device: "Dev3" },
+      );
 
       const loginAll = await login(
         {
@@ -300,7 +339,12 @@ describe("Auth Service (auth.service.ts)", () => {
       });
 
       const fakeSid = new mongoose.Types.ObjectId().toString();
-      const changed = await changePassword(user.id, fakeSid, "IncorrectCurrentPassword!", passwordNew);
+      const changed = await changePassword(
+        user.id,
+        fakeSid,
+        "IncorrectCurrentPassword!",
+        passwordNew,
+      );
       expect(changed).toBe(false);
     });
 
@@ -314,7 +358,11 @@ describe("Auth Service (auth.service.ts)", () => {
 
       // Login session 1 (the one changing the password)
       const login1 = await login(
-        { email: user.email, password: passwordInitial, name: "Current Session" },
+        {
+          email: user.email,
+          password: passwordInitial,
+          name: "Current Session",
+        },
         {},
       );
       expect(login1.status).toBe("ok");
@@ -329,11 +377,20 @@ describe("Auth Service (auth.service.ts)", () => {
       const allSessionsBefore = await Session.find({ userId: user.id });
       expect(allSessionsBefore).toHaveLength(2);
 
-      const currentSid = allSessionsBefore.find((s) => s.name === "Current Session")!._id.toString();
-      const otherSid = allSessionsBefore.find((s) => s.name === "Other Session")!._id.toString();
+      const currentSid = allSessionsBefore
+        .find((s) => s.name === "Current Session")!
+        ._id.toString();
+      const otherSid = allSessionsBefore
+        .find((s) => s.name === "Other Session")!
+        ._id.toString();
 
       // Change password from session 1
-      const changed = await changePassword(user.id, currentSid, passwordInitial, passwordNew);
+      const changed = await changePassword(
+        user.id,
+        currentSid,
+        passwordInitial,
+        passwordNew,
+      );
       expect(changed).toBe(true);
 
       // Verify session 2 is revoked while session 1 survives
@@ -343,11 +400,17 @@ describe("Auth Service (auth.service.ts)", () => {
       expect(otherSessionAfter).toBeNull();
 
       // Verify old password fails to login
-      const oldLogin = await login({ email: user.email, password: passwordInitial }, {});
+      const oldLogin = await login(
+        { email: user.email, password: passwordInitial },
+        {},
+      );
       expect(oldLogin.status).toBe("invalid_credentials");
 
       // Verify new password succeeds
-      const newLogin = await login({ email: user.email, password: passwordNew }, {});
+      const newLogin = await login(
+        { email: user.email, password: passwordNew },
+        {},
+      );
       expect(newLogin.status).toBe("ok");
     });
   });

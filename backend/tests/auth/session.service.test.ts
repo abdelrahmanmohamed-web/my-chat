@@ -11,7 +11,10 @@ import {
   isAccessTokenValid,
 } from "../../src/modules/auth/sessions/session.service.ts";
 import { Session } from "../../src/modules/auth/sessions/session.model.ts";
-import { createRefreshToken, hashToken } from "../../src/modules/auth/auth.tokens.ts";
+import {
+  createRefreshToken,
+  hashToken,
+} from "../../src/modules/auth/auth.tokens.ts";
 import { connectTestDB, disconnectTestDB, clearTestDB } from "../helpers/db.ts";
 
 describe("Session Service (session.service.ts)", () => {
@@ -58,21 +61,24 @@ describe("Session Service (session.service.ts)", () => {
     });
 
     it("should detect Windows PC and Chrome browser", () => {
-      const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+      const ua =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
       const result = parseUserAgent(ua);
       expect(result.device).toBe("Windows PC");
       expect(result.defaultName).toBe("Chrome on Windows PC");
     });
 
     it("should detect iPhone and Safari browser", () => {
-      const ua = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
+      const ua =
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
       const result = parseUserAgent(ua);
       expect(result.device).toBe("iPhone");
       expect(result.defaultName).toBe("Safari on iPhone");
     });
 
     it("should detect Windows PC and Edge browser", () => {
-      const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0";
+      const ua =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0";
       const result = parseUserAgent(ua);
       expect(result.device).toBe("Windows PC");
       expect(result.defaultName).toBe("Edge on Windows PC");
@@ -81,10 +87,13 @@ describe("Session Service (session.service.ts)", () => {
 
   describe("createSession", () => {
     it("should persist a new session and issue access and refresh tokens", async () => {
-      const { session, accessToken, refreshToken } = await createSession(testUserId, {
-        userAgent: "PostmanRuntime/7.39.0",
-        ip: "192.168.1.100",
-      });
+      const { session, accessToken, refreshToken } = await createSession(
+        testUserId,
+        {
+          userAgent: "PostmanRuntime/7.39.0",
+          ip: "192.168.1.100",
+        },
+      );
 
       expect(session).toBeDefined();
       expect(session._id).toBeDefined();
@@ -119,9 +128,12 @@ describe("Session Service (session.service.ts)", () => {
 
   describe("rotateSessionToken", () => {
     it("should rotate tokens successfully and increment version when valid", async () => {
-      const { session, refreshToken: initialRefresh } = await createSession(testUserId, {
-        userAgent: "curl/8.4.0",
-      });
+      const { session, refreshToken: initialRefresh } = await createSession(
+        testUserId,
+        {
+          userAgent: "curl/8.4.0",
+        },
+      );
 
       const rotateRes = await rotateSessionToken(initialRefresh);
       expect(rotateRes.status).toBe("ok");
@@ -136,12 +148,17 @@ describe("Session Service (session.service.ts)", () => {
       // Check updated DB state
       const updatedSession = await Session.findById(session._id);
       expect(updatedSession?.currentVersion).toBe(2);
-      expect(updatedSession?.refreshTokenHash).toBe(hashToken(rotateRes.refreshToken));
+      expect(updatedSession?.refreshTokenHash).toBe(
+        hashToken(rotateRes.refreshToken),
+      );
     });
 
     it("should detect token reuse and immediately purge the session from MongoDB", async () => {
       // 1. Create session (version 1)
-      const { session, refreshToken: v1Token } = await createSession(testUserId, {});
+      const { session, refreshToken: v1Token } = await createSession(
+        testUserId,
+        {},
+      );
 
       // 2. Rotate to version 2
       const firstRotation = await rotateSessionToken(v1Token);
@@ -158,7 +175,12 @@ describe("Session Service (session.service.ts)", () => {
 
     it("should reject rotation for non-existent or invalid session", async () => {
       const fakeSessionId = new mongoose.Types.ObjectId().toString();
-      const fakeToken = await createRefreshToken(testUserId, fakeSessionId, 1, 3600);
+      const fakeToken = await createRefreshToken(
+        testUserId,
+        fakeSessionId,
+        1,
+        3600,
+      );
 
       const result = await rotateSessionToken(fakeToken);
       expect(result.status).toBe("invalid");
@@ -178,8 +200,12 @@ describe("Session Service (session.service.ts)", () => {
 
   describe("listUserSessions", () => {
     it("should list active sessions and flag the current session correctly", async () => {
-      const { session: s1 } = await createSession(testUserId, { name: "Session 1" });
-      const { session: s2 } = await createSession(testUserId, { name: "Session 2" });
+      const { session: s1 } = await createSession(testUserId, {
+        name: "Session 1",
+      });
+      const { session: s2 } = await createSession(testUserId, {
+        name: "Session 2",
+      });
 
       const list = await listUserSessions(testUserId, s2._id.toString());
       expect(list).toHaveLength(2);
@@ -194,8 +220,12 @@ describe("Session Service (session.service.ts)", () => {
     });
 
     it("should exclude expired sessions from the list", async () => {
-      const { session: active } = await createSession(testUserId, { name: "Active" });
-      const { session: expired } = await createSession(testUserId, { name: "Expired" });
+      const { session: active } = await createSession(testUserId, {
+        name: "Active",
+      });
+      const { session: expired } = await createSession(testUserId, {
+        name: "Expired",
+      });
 
       await Session.findByIdAndUpdate(expired._id, {
         expiresAt: new Date(Date.now() - 10000),
@@ -209,9 +239,15 @@ describe("Session Service (session.service.ts)", () => {
 
   describe("updateSessionName", () => {
     it("should update session name when session belongs to user", async () => {
-      const { session } = await createSession(testUserId, { name: "Initial Name" });
+      const { session } = await createSession(testUserId, {
+        name: "Initial Name",
+      });
 
-      const updated = await updateSessionName(testUserId, session._id.toString(), "Updated Office Mac");
+      const updated = await updateSessionName(
+        testUserId,
+        session._id.toString(),
+        "Updated Office Mac",
+      );
       expect(updated).toBe(true);
 
       const found = await Session.findById(session._id);
@@ -220,14 +256,24 @@ describe("Session Service (session.service.ts)", () => {
 
     it("should return false if session ID belongs to another user", async () => {
       const otherUserId = new mongoose.Types.ObjectId().toString();
-      const { session } = await createSession(testUserId, { name: "User 1 Session" });
+      const { session } = await createSession(testUserId, {
+        name: "User 1 Session",
+      });
 
-      const updated = await updateSessionName(otherUserId, session._id.toString(), "Malicious Rename");
+      const updated = await updateSessionName(
+        otherUserId,
+        session._id.toString(),
+        "Malicious Rename",
+      );
       expect(updated).toBe(false);
     });
 
     it("should return false for invalid ObjectId format", async () => {
-      const updated = await updateSessionName(testUserId, "invalid-mongo-id", "New Name");
+      const updated = await updateSessionName(
+        testUserId,
+        "invalid-mongo-id",
+        "New Name",
+      );
       expect(updated).toBe(false);
     });
   });
@@ -244,7 +290,10 @@ describe("Session Service (session.service.ts)", () => {
     });
 
     it("should return false when session does not exist or invalid ID", async () => {
-      const notFound = await revokeSession(testUserId, new mongoose.Types.ObjectId().toString());
+      const notFound = await revokeSession(
+        testUserId,
+        new mongoose.Types.ObjectId().toString(),
+      );
       expect(notFound).toBe(false);
 
       const invalidId = await revokeSession(testUserId, "not-an-id");
@@ -266,11 +315,16 @@ describe("Session Service (session.service.ts)", () => {
     });
 
     it("should preserve exceptSid session when provided", async () => {
-      const { session: keepSession } = await createSession(testUserId, { name: "Keep Me" });
+      const { session: keepSession } = await createSession(testUserId, {
+        name: "Keep Me",
+      });
       await createSession(testUserId, { name: "Drop 1" });
       await createSession(testUserId, { name: "Drop 2" });
 
-      const count = await revokeAllSessions(testUserId, keepSession._id.toString());
+      const count = await revokeAllSessions(
+        testUserId,
+        keepSession._id.toString(),
+      );
       expect(count).toBe(2);
 
       const remaining = await Session.find({ userId: testUserId });
@@ -329,9 +383,15 @@ describe("Session Service (session.service.ts)", () => {
     });
 
     it("should return false for invalid session ID format or non-existent session", async () => {
-      expect(await isAccessTokenValid("bad-id", testUserId, "any-token")).toBe(false);
+      expect(await isAccessTokenValid("bad-id", testUserId, "any-token")).toBe(
+        false,
+      );
       expect(
-        await isAccessTokenValid(new mongoose.Types.ObjectId().toString(), testUserId, "any-token"),
+        await isAccessTokenValid(
+          new mongoose.Types.ObjectId().toString(),
+          testUserId,
+          "any-token",
+        ),
       ).toBe(false);
     });
   });

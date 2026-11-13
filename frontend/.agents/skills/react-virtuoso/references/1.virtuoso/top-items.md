@@ -11,16 +11,20 @@ Scroll the list below - the first two items remain fixed and always visible.
 `backgroundColor` is set to hide the scrollable items behind the top ones.
 
 ```tsx live
-import { Virtuoso } from 'react-virtuoso'
+import { Virtuoso } from "react-virtuoso";
 
 export default function App() {
   return (
     <Virtuoso
-      style={{ height: '100%' }}
+      style={{ height: "100%" }}
       totalCount={1000}
       topItemCount={2}
-      itemContent={(index) => <div style={{ height: 30, backgroundColor: 'var(--background)' }}>Item {index + 1}</div>}
+      itemContent={(index) => (
+        <div style={{ height: 30, backgroundColor: "var(--background)" }}>
+          Item {index + 1}
+        </div>
+      )}
     />
-  )
+  );
 }
 ```

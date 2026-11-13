@@ -15,8 +15,8 @@ It is up to you to build and return the respective content for it.
 ## List with `data`
 
 ```tsx live
-import { Virtuoso } from 'react-virtuoso'
-import { useMemo } from 'react'
+import { Virtuoso } from "react-virtuoso";
+import { useMemo } from "react";
 
 export default function App() {
   const users = useMemo(() => {
@@ -25,17 +25,17 @@ export default function App() {
       // random-sized items
       size: Math.floor(Math.random() * 40) + 70,
       description: `Description for user ${index}`,
-    }))
-  }, [])
+    }));
+  }, []);
 
   return (
     <Virtuoso
-      style={{ height: '100%' }}
+      style={{ height: "100%" }}
       data={users}
       itemContent={(_, user) => (
         <div
           style={{
-            padding: '0.5rem',
+            padding: "0.5rem",
             height: `${user.size}px`,
             borderBottom: `1px solid var(--border)`,
           }}
@@ -47,15 +47,15 @@ export default function App() {
         </div>
       )}
     />
-  )
+  );
 }
 ```
 
 ## List with `totalCount`
 
 ```tsx live
-import { Virtuoso } from 'react-virtuoso'
-import { useMemo } from 'react'
+import { Virtuoso } from "react-virtuoso";
+import { useMemo } from "react";
 
 export default function App() {
   const users = useMemo(() => {
@@ -63,19 +63,19 @@ export default function App() {
       name: `User ${index}`,
       size: Math.floor(Math.random() * 40) + 70,
       description: `Description for user ${index}`,
-    }))
-  }, [])
+    }));
+  }, []);
 
   return (
     <Virtuoso
-      style={{ height: '100%' }}
+      style={{ height: "100%" }}
       totalCount={users.length}
       itemContent={(index) => {
-        const user = users[index]
+        const user = users[index];
         return (
           <div
             style={{
-              padding: '0.5rem',
+              padding: "0.5rem",
               height: `${user.size}px`,
               borderBottom: `1px solid var(--border)`,
             }}
@@ -85,9 +85,9 @@ export default function App() {
             </p>
             <div>{user.description}</div>
           </div>
-        )
+        );
       }}
     />
-  )
+  );
 }
 ```

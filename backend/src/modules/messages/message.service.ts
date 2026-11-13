@@ -18,7 +18,10 @@ export async function sendMessage(
   conversationId: string,
   input: SendMessageInput,
 ) {
-  if (!Types.ObjectId.isValid(userId) || !Types.ObjectId.isValid(conversationId)) {
+  if (
+    !Types.ObjectId.isValid(userId) ||
+    !Types.ObjectId.isValid(conversationId)
+  ) {
     return { kind: "invalid" as const };
   }
 
@@ -78,7 +81,10 @@ export async function listMessages(
   conversationId: string,
   query: ListMessagesQuery,
 ) {
-  if (!Types.ObjectId.isValid(userId) || !Types.ObjectId.isValid(conversationId)) {
+  if (
+    !Types.ObjectId.isValid(userId) ||
+    !Types.ObjectId.isValid(conversationId)
+  ) {
     return { kind: "invalid" as const };
   }
 

@@ -113,7 +113,10 @@ export function registerSocketEvents(
       await socket.join(`conversation:${conversationId}`);
       ack?.({ status: "ok", data: { conversationId } });
     } catch (error) {
-      logger.error({ err: error, conversationId }, "Error joining conversation");
+      logger.error(
+        { err: error, conversationId },
+        "Error joining conversation",
+      );
       ack?.({ status: "error", error: "Failed to join conversation" });
     }
   });
@@ -206,7 +209,10 @@ export function registerSocketEvents(
         },
       );
     } catch (error) {
-      logger.error({ err: error }, "Error marking message as read via WebSocket");
+      logger.error(
+        { err: error },
+        "Error marking message as read via WebSocket",
+      );
       ack?.({ status: "error", error: "Internal server error" });
     }
   });

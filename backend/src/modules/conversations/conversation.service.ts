@@ -32,7 +32,10 @@ import type {
  * @param secondId Second user identifier
  * @returns Sorted, colon-delimited pair key string
  */
-export function directConversationKey(firstId: string, secondId: string): string {
+export function directConversationKey(
+  firstId: string,
+  secondId: string,
+): string {
   return [firstId, secondId].sort().join(":");
 }
 
@@ -63,7 +66,11 @@ export async function populateAutomaticConversationNames(
   const counterpartIdSet = new Set<string>();
 
   for (const conv of conversations) {
-    if (!conv.name && conv.type === "direct" && Array.isArray(conv.participantIds)) {
+    if (
+      !conv.name &&
+      conv.type === "direct" &&
+      Array.isArray(conv.participantIds)
+    ) {
       const counterpartId = conv.participantIds.find(
         (id) => id.toString() !== currentUserIdStr,
       );
@@ -87,7 +94,11 @@ export async function populateAutomaticConversationNames(
   }
 
   for (const conv of conversations) {
-    if (!conv.name && conv.type === "direct" && Array.isArray(conv.participantIds)) {
+    if (
+      !conv.name &&
+      conv.type === "direct" &&
+      Array.isArray(conv.participantIds)
+    ) {
       const counterpartId = conv.participantIds.find(
         (id) => id.toString() !== currentUserIdStr,
       );
@@ -210,7 +221,9 @@ export async function createOrRestoreDirectConversation(
   }
 
   // Ensure the target participant actually exists in the database
-  const otherUser = await User.findById(otherObjectId).select("displayName").lean();
+  const otherUser = await User.findById(otherObjectId)
+    .select("displayName")
+    .lean();
   if (!otherUser) return { kind: "not_found" as const };
 
   const currentId = currentObjectId.toString();

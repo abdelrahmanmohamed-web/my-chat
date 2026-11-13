@@ -42,10 +42,16 @@ npx skills add virtuoso-dev/skills --skill react-virtuoso
 Add the `Virtuoso` Component to your React project. The bare minimum it needs is a height for its container (either explicitly set, or adjusted through a parent flexbox), the number of items to display, and a callback to render the item content.
 
 ```tsx live
-import { Virtuoso } from 'react-virtuoso'
+import { Virtuoso } from "react-virtuoso";
 
 export default function App() {
-  return <Virtuoso style={{ height: '100%' }} totalCount={200} itemContent={(index) => <div>Item {index}</div>} />
+  return (
+    <Virtuoso
+      style={{ height: "100%" }}
+      totalCount={200}
+      itemContent={(index) => <div>Item {index}</div>}
+    />
+  );
 }
 ```
 
@@ -60,18 +66,18 @@ The `GroupedVirtuoso` component is similar to the "flat" `Virtuoso`, with the fo
 - The `itemContent` render prop gets called with an additional second parameter, `groupIndex: number`.
 
 ```tsx live
-import { GroupedVirtuoso } from 'react-virtuoso'
+import { GroupedVirtuoso } from "react-virtuoso";
 
-const groupCounts = []
+const groupCounts = [];
 
 for (let index = 0; index < 1000; index++) {
-  groupCounts.push(10)
+  groupCounts.push(10);
 }
 
 export default function App() {
   return (
     <GroupedVirtuoso
-      style={{ height: '100%' }}
+      style={{ height: "100%" }}
       groupCounts={groupCounts}
       groupContent={(index) => {
         return (
@@ -79,17 +85,17 @@ export default function App() {
           <div>
             Group {index * 10} &ndash; {index * 10 + 10}
           </div>
-        )
+        );
       }}
       itemContent={(index, groupIndex) => {
         return (
           <div>
             Item {groupIndex}.{index}
           </div>
-        )
+        );
       }}
     />
-  )
+  );
 }
 ```
 
@@ -104,12 +110,12 @@ examples.
 The `TableVirtuoso` component works like the `Virtuoso` one, but with HTML tables. It supports window scrolling, sticky headers, and fixed columns.
 
 ```tsx live
-import { TableVirtuoso } from 'react-virtuoso'
+import { TableVirtuoso } from "react-virtuoso";
 
 export default function App() {
   return (
     <TableVirtuoso
-      style={{ height: '100%' }}
+      style={{ height: "100%" }}
       data={Array.from({ length: 100 }, (_, index) => ({
         name: `User ${index}`,
         description: `${index} description`,
@@ -121,7 +127,7 @@ export default function App() {
         </>
       )}
     />
-  )
+  );
 }
 ```
 
@@ -132,19 +138,19 @@ The layout and item sizing is controlled CSS class properties or styled containe
 which allows you to use media queries, min-width, percentage, etc.
 
 ```tsx live
-import { VirtuosoGrid, VirtuosoGridProps } from 'react-virtuoso'
-import { forwardRef } from 'react'
+import { VirtuosoGrid, VirtuosoGridProps } from "react-virtuoso";
+import { forwardRef } from "react";
 
 // Ensure that the component definitions are not declared inline in the component function,
 // Otherwise the grid will remount with each render due to new component instances.
-const gridComponents: VirtuosoGridProps<undefined, undefined>['components'] = {
+const gridComponents: VirtuosoGridProps<undefined, undefined>["components"] = {
   List: forwardRef(({ style, children, ...props }, ref) => (
     <div
       ref={ref}
       {...props}
       style={{
-        display: 'flex',
-        flexWrap: 'wrap',
+        display: "flex",
+        flexWrap: "wrap",
         ...style,
       }}
     >
@@ -155,47 +161,47 @@ const gridComponents: VirtuosoGridProps<undefined, undefined>['components'] = {
     <div
       {...props}
       style={{
-        padding: '0.5rem',
-        width: '33%',
-        display: 'flex',
-        flex: 'none',
-        alignContent: 'stretch',
-        boxSizing: 'border-box',
+        padding: "0.5rem",
+        width: "33%",
+        display: "flex",
+        flex: "none",
+        alignContent: "stretch",
+        boxSizing: "border-box",
       }}
     >
       {children}
     </div>
   ),
-}
+};
 
 const ItemWrapper = ({ children, ...props }) => (
   <div
     {...props}
     style={{
-      display: 'flex',
+      display: "flex",
       flex: 1,
-      textAlign: 'center',
-      padding: '1rem 1rem',
-      border: '1px solid gray',
-      whiteSpace: 'nowrap',
+      textAlign: "center",
+      padding: "1rem 1rem",
+      border: "1px solid gray",
+      whiteSpace: "nowrap",
     }}
   >
     {children}
   </div>
-)
+);
 
 export default function App() {
   return (
     <>
       <VirtuosoGrid
-        style={{ height: '100%' }}
+        style={{ height: "100%" }}
         totalCount={1000}
         components={gridComponents}
         itemContent={(index) => <ItemWrapper>Item {index}</ItemWrapper>}
       />
       <style>{`html, body, #root { margin: 0; padding: 0 }`}</style>
     </>
-  )
+  );
 }
 ```
 
@@ -213,25 +219,31 @@ Next, if the items are complex or slow to render, use [React.memo](https://react
 // Item contents are cached properly with React.memo
 const InnerItem = React.memo(({ index }) => {
   React.useEffect(() => {
-    console.log('inner mounting', index)
+    console.log("inner mounting", index);
     return () => {
-      console.log('inner unmounting', index)
-    }
-  }, [index])
-  return <div style={{ height: 30 }}>Item {index}</div>
-})
+      console.log("inner unmounting", index);
+    };
+  }, [index]);
+  return <div style={{ height: 30 }}>Item {index}</div>;
+});
 
 // The callback is executed often - don't inline complex components in here.
 const itemContent = (index) => {
-  console.log('providing content', index)
-  return <InnerItem index={index} />
-}
+  console.log("providing content", index);
+  return <InnerItem index={index} />;
+};
 
 const App = () => {
-  return <Virtuoso totalCount={100} itemContent={itemContent} style={{ height: '100%' }} />
-}
+  return (
+    <Virtuoso
+      totalCount={100}
+      itemContent={itemContent}
+      style={{ height: "100%" }}
+    />
+  );
+};
 
-ReactDOM.render(<App />, document.getElementById('root'))
+ReactDOM.render(<App />, document.getElementById("root"));
 ```
 
 You can experiment with the `increaseViewportBy` property that specifies

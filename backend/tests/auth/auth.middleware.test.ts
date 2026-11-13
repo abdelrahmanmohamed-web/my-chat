@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import mongoose from "mongoose";
 import type { Request, Response, NextFunction } from "express";
-import { verifyAccessToken, requireAuth } from "../../src/modules/auth/auth.middleware.ts";
+import {
+  verifyAccessToken,
+  requireAuth,
+} from "../../src/modules/auth/auth.middleware.ts";
 import { createAccessToken } from "../../src/modules/auth/auth.tokens.ts";
 import { createSession } from "../../src/modules/auth/sessions/session.service.ts";
 import { connectTestDB, disconnectTestDB, clearTestDB } from "../helpers/db.ts";
@@ -29,7 +32,10 @@ function createMockReqRes(authHeader?: string) {
     },
     getStatusCode: () => statusCode,
     getJsonResponse: () => jsonResponse,
-  } as unknown as Response & { getStatusCode: () => number; getJsonResponse: () => unknown };
+  } as unknown as Response & {
+    getStatusCode: () => number;
+    getJsonResponse: () => unknown;
+  };
 
   return { req, res };
 }
@@ -101,7 +107,12 @@ describe("Auth Middleware (auth.middleware.ts)", () => {
 
     it("should respond with 401 Unauthorized if token is valid JWT but session does not exist in DB", async () => {
       const nonExistentSid = new mongoose.Types.ObjectId().toString();
-      const token = await createAccessToken(testUserId, nonExistentSid, "token-id", 3600);
+      const token = await createAccessToken(
+        testUserId,
+        nonExistentSid,
+        "token-id",
+        3600,
+      );
 
       const { req, res } = createMockReqRes(`Bearer ${token}`);
       let nextCalled = false;
@@ -121,7 +132,12 @@ describe("Auth Middleware (auth.middleware.ts)", () => {
       const { session } = await createSession(testUserId, {});
 
       // Create token with stale/wrong tokenId
-      const staleToken = await createAccessToken(testUserId, session._id.toString(), "stale-old-token-id", 3600);
+      const staleToken = await createAccessToken(
+        testUserId,
+        session._id.toString(),
+        "stale-old-token-id",
+        3600,
+      );
 
       const { req, res } = createMockReqRes(`Bearer ${staleToken}`);
       let nextCalled = false;

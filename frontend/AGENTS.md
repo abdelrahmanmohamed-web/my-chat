@@ -16,19 +16,19 @@ Work **one phase at a time** (section 8). After each phase: run the checks in se
 
 ## 2. Stack (do not add libraries outside this list without asking)
 
-| Area | Choice |
-|---|---|
-| Build / language | Vite, React, TypeScript (`strict: true`, no `any`) |
-| Styling / UI | Tailwind, shadcn/ui (added via the CLI), `lucide-react` icons |
-| Realtime | `socket.io-client` **>= 4.8** (needed for `tryAllTransports`) |
-| Server state | `@tanstack/react-query` |
-| Client state | `zustand` |
-| Routing | `react-router-dom` |
-| Validation | `zod` |
-| Chat list virtualization | `react-virtuoso` |
-| Toasts | `sonner` (via shadcn) |
-| Tests | `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`, `msw` |
-| Formatting | ESLint, Prettier, `prettier-plugin-tailwindcss` |
+| Area                     | Choice                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| Build / language         | Vite, React, TypeScript (`strict: true`, no `any`)                              |
+| Styling / UI             | Tailwind, shadcn/ui (added via the CLI), `lucide-react` icons                   |
+| Realtime                 | `socket.io-client` **>= 4.8** (needed for `tryAllTransports`)                   |
+| Server state             | `@tanstack/react-query`                                                         |
+| Client state             | `zustand`                                                                       |
+| Routing                  | `react-router-dom`                                                              |
+| Validation               | `zod`                                                                           |
+| Chat list virtualization | `react-virtuoso`                                                                |
+| Toasts                   | `sonner` (via shadcn)                                                           |
+| Tests                    | `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`, `msw` |
+| Formatting               | ESLint, Prettier, `prettier-plugin-tailwindcss`                                 |
 
 Optional (only if I ask): `axios` (otherwise write a small `fetch` wrapper), `react-hook-form` + `@hookform/resolvers`, `date-fns` (otherwise use `Intl.DateTimeFormat` / `Intl.RelativeTimeFormat`), `@playwright/test`.
 
@@ -37,6 +37,7 @@ Optional (only if I ask): `axios` (otherwise write a small `fetch` wrapper), `re
 ## 3. Backend contract (source of truth: `docs.html`)
 
 ### Connection and auth
+
 - Path `/socket.io`, default namespace `/`, transports `["websocket", "polling"]`.
 - Token is read from, in priority order: `handshake.headers.authorization` (`Bearer <token>` or raw), `handshake.auth.authorization`, `handshake.auth.token` (**use this one in the browser**).
 - Server verifies an HS256 JWT plus an active session in MongoDB. This happens **only at handshake time**.
@@ -46,25 +47,40 @@ Optional (only if I ask): `axios` (otherwise write a small `fetch` wrapper), `re
 ### Types
 
 ```ts
-export type SocketAck<T = unknown> = { status: "ok" | "error"; data?: T; error?: string };
+export type SocketAck<T = unknown> = {
+  status: "ok" | "error";
+  data?: T;
+  error?: string;
+};
 
 export interface ServerToClientEvents {
   "message:new": (p: { conversationId: string; message: Message }) => void;
-  "message:read_update": (p: { conversationId: string; userId: string; lastReadMessageId: string }) => void;
-  "user:typing": (p: { conversationId: string; userId: string; isTyping: boolean }) => void;
+  "message:read_update": (p: {
+    conversationId: string;
+    userId: string;
+    lastReadMessageId: string;
+  }) => void;
+  "user:typing": (p: {
+    conversationId: string;
+    userId: string;
+    isTyping: boolean;
+  }) => void;
   "user:status": (p: { userId: string; status: "online" | "offline" }) => void;
 }
 
 export interface ClientToServerEvents {
-  "join:conversation": (id: string, ack?: (r: SocketAck<{ conversationId: string }>) => void) => void;
+  "join:conversation": (
+    id: string,
+    ack?: (r: SocketAck<{ conversationId: string }>) => void,
+  ) => void;
   "leave:conversation": (id: string) => void;
   "message:send": (
     p: { conversationId: string; content: string; clientId?: string },
-    ack?: (r: SocketAck<{ message: Message; duplicate: boolean }>) => void
+    ack?: (r: SocketAck<{ message: Message; duplicate: boolean }>) => void,
   ) => void;
   "message:read": (
     p: { conversationId: string; messageId: string },
-    ack?: (r: SocketAck<{ status: "ok" }>) => void
+    ack?: (r: SocketAck<{ status: "ok" }>) => void,
   ) => void;
   "typing:start": (id: string) => void;
   "typing:stop": (id: string) => void;
@@ -72,6 +88,7 @@ export interface ClientToServerEvents {
 ```
 
 ### Semantics that matter
+
 - `join:conversation` ack errors: `"Invalid conversation ID"`, `"Forbidden: Not a participant"`, `"Failed to join conversation"`.
 - `message:send` ack errors: `"Invalid message payload"`, `"Invalid conversation ID"`, `"Forbidden: Not a participant"`, `"Internal server error"`. Idempotent by `clientId` (`duplicate: true` on replay).
 - `message:new` is emitted to **both** `conversation:<id>` and `user:<participantId>` for every participant. An active participant therefore receives it **twice**. It is also emitted for REST `POST /api/conversations/{id}/messages`.
@@ -82,6 +99,7 @@ export interface ClientToServerEvents {
 - Dev note: `vite.config.ts` proxies `/api` only. Add a `/socket.io` entry with `ws: true`.
 
 ### Unknown (do NOT invent; see section 6)
+
 Auth endpoints and response shapes, refresh-token mechanism, conversations list/create, messages list and pagination style, user search, the exact `Message`/`Conversation`/`User` shapes, whether `Message` contains `clientId`, whether the REST send endpoint is idempotent by `clientId`, max message length, group vs 1-to-1, `unreadCount` availability.
 
 ## 4. Realtime requirements (all mandatory)
@@ -164,19 +182,19 @@ Cache keys: `["me"]`, `["conversations"]`, `["messages", conversationId]` (infin
 ## 8. Phases (execute one at a time)
 
 **Phase 0 — Setup.** Vite + TS strict, Tailwind, shadcn init (alias `@`), install the stack, ESLint/Prettier, `.env` files (`VITE_API_URL`, `VITE_SOCKET_URL`, both empty in dev), Vite proxy for `/api` and `/socket.io` (`ws: true`), folder skeleton, `types/` from section 3.
-*Done when:* app boots, `tsc --noEmit` and lint pass.
+_Done when:_ app boots, `tsc --noEmit` and lint pass.
 
 **Phase 1 — Auth.** HTTP client with single-flight refresh, auth store, `ProtectedRoute`, login page (+ register only if the API has it), session restore on load, logout. Theme the shadcn tokens (colors, radius, one typeface that supports Arabic and Latin).
-*Done when:* login, reload, logout and forced-401 handling work against MSW mocks.
+_Done when:_ login, reload, logout and forced-401 handling work against MSW mocks.
 
 **Phase 2 — REST baseline (no socket).** Conversations list, message list with infinite scroll upward, send via `POST`, optimistic message with `sending/sent/failed` + Retry, mark-read via `PATCH`, skeletons and empty states, responsive layout (two panes on desktop, route-based single pane on mobile).
-*Done when:* a full chat works over REST alone. This is the fallback path.
+_Done when:_ a full chat works over REST alone. This is the fallback path.
 
 **Phase 3 — Realtime.** Typed socket singleton, `RealtimeProvider`, handlers for `message:new` (idempotent upsert) and `message:read_update`, join/leave, re-join and refetch on reconnect, connection store + status indicator.
-*Done when:* two browser tabs exchange messages in realtime and no duplicate ever renders.
+_Done when:_ two browser tabs exchange messages in realtime and no duplicate ever renders.
 
 **Phase 4 — Resilience.** WS-first send with timeout then HTTP using the same `clientId`, outbox, `connect_error` handling (section 4.5), REST polling when the socket is down, three-level connectivity UI.
-*Done when:* blocking WebSocket requests degrades to long-polling with no code path breaking, and going fully offline switches to REST-only mode and recovers cleanly.
+_Done when:_ blocking WebSocket requests degrades to long-polling with no code path breaking, and going fully offline switches to REST-only mode and recovers cleanly.
 
 **Phase 5 — Polish.** Typing indicator, presence (with "unknown" handling), debounced read receipts, browser notifications + `document.title` unread count, dark mode, date separators and message grouping, RTL check.
 
@@ -191,6 +209,7 @@ npm run test -- --run
 ```
 
 Manual checks the report must mention when relevant:
+
 - DevTools → Network → **Request blocking** with `*transport=websocket*` (expect Level 2 to work).
 - DevTools → Network → **Offline** (expect Level 3: banner, REST send, recovery on reconnect).
 - Same user in two tabs and two different users in two browsers.

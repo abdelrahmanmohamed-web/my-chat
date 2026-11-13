@@ -23,12 +23,12 @@ The component renders an HTML table structure. Few CSS settings can affect its l
 ## Table with `data`
 
 ```tsx live
-import { TableVirtuoso } from 'react-virtuoso'
+import { TableVirtuoso } from "react-virtuoso";
 
 export default function App() {
   return (
     <TableVirtuoso
-      style={{ height: '100%' }}
+      style={{ height: "100%" }}
       data={Array.from({ length: 100 }, (_, index) => ({
         name: `User ${index}`,
         description: `${index} description`,
@@ -40,15 +40,15 @@ export default function App() {
         </>
       )}
     />
-  )
+  );
 }
 ```
 
 ## Table with `totalCount`
 
 ```tsx live
-import { TableVirtuoso } from 'react-virtuoso'
-import { useMemo } from 'react'
+import { TableVirtuoso } from "react-virtuoso";
+import { useMemo } from "react";
 
 export default function App() {
   const users = useMemo(
@@ -57,41 +57,59 @@ export default function App() {
         name: `User ${index}`,
         description: `${index} description`,
       })),
-    []
-  )
+    [],
+  );
 
   return (
     <TableVirtuoso
-      style={{ height: '100%' }}
+      style={{ height: "100%" }}
       totalCount={users.length}
       itemContent={(index) => {
-        const user = users[index]
+        const user = users[index];
         return (
           <>
             <td style={{ width: 150 }}>{user.name}</td>
             <td>{user.description}</td>
           </>
-        )
+        );
       }}
     />
-  )
+  );
 }
 ```
 
 ## Table with `useWindowScroll`
 
 ```tsx live
-import { TableVirtuoso } from 'react-virtuoso'
+import { TableVirtuoso } from "react-virtuoso";
 
 export default function App() {
   return (
     <TableVirtuoso
-      data={Array.from({ length: 100 }, (_, index) => ({ name: `User ${index}`, description: `${index} description` }))}
+      data={Array.from({ length: 100 }, (_, index) => ({
+        name: `User ${index}`,
+        description: `${index} description`,
+      }))}
       useWindowScroll
       fixedHeaderContent={() => (
         <tr>
-          <th style={{ width: 150, background: 'var(--background)', color: 'var(--foreground)' }}>Name</th>
-          <th style={{ background: 'var(--background)', color: 'var(--foreground)' }}>Description</th>
+          <th
+            style={{
+              width: 150,
+              background: "var(--background)",
+              color: "var(--foreground)",
+            }}
+          >
+            Name
+          </th>
+          <th
+            style={{
+              background: "var(--background)",
+              color: "var(--foreground)",
+            }}
+          >
+            Description
+          </th>
         </tr>
       )}
       itemContent={(index, user) => (
@@ -101,6 +119,6 @@ export default function App() {
         </>
       )}
     />
-  )
+  );
 }
 ```

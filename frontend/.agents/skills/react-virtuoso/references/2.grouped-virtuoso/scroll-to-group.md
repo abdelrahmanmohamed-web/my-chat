@@ -9,31 +9,31 @@ sidebar:
 This example re-creates the UI of the iOS contacts listview.
 
 ```tsx live
-import { GroupedVirtuoso } from 'react-virtuoso'
-import { useMemo, useRef } from 'react'
+import { GroupedVirtuoso } from "react-virtuoso";
+import { useMemo, useRef } from "react";
 export default function App() {
   const { users, groups, groupCounts } = useMemo(() => {
-    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
     const users = letters.flatMap((letter) => {
       return Array.from({ length: 20 }, (_, index) => ({
         name: `${letter} User ${index}`,
         initials: `${letter}${index}`,
         description: `Description for user ${index}`,
-      }))
-    })
+      }));
+    });
 
-    const groups = letters
+    const groups = letters;
 
     const groupCounts = groups.map((letter) => {
-      return users.filter((user) => user.name.startsWith(letter)).length
-    })
-    return { users, groups, groupCounts }
-  }, [])
-  const virtuoso = useRef(null)
+      return users.filter((user) => user.name.startsWith(letter)).length;
+    });
+    return { users, groups, groupCounts };
+  }, []);
+  const virtuoso = useRef(null);
 
   return (
-    <div style={{ display: 'flex', height: '100%' }}>
+    <div style={{ display: "flex", height: "100%" }}>
       <div style={{ flex: 1 }}>
         <GroupedVirtuoso
           ref={virtuoso}
@@ -42,32 +42,32 @@ export default function App() {
             return (
               <div
                 style={{
-                  backgroundColor: 'var(--background)',
-                  padding: '0.3rem 1rem',
+                  backgroundColor: "var(--background)",
+                  padding: "0.3rem 1rem",
                 }}
               >
                 {groups[index]}
               </div>
-            )
+            );
           }}
           itemContent={(index) => {
             return (
-              <div style={{ padding: '0.5rem 1rem' }}>
+              <div style={{ padding: "0.5rem 1rem" }}>
                 <h4>{users[index].name}</h4>
 
                 <p style={{ marginBottom: 0 }}>{users[index].description}</p>
               </div>
-            )
+            );
           }}
         />
       </div>
 
       <ul
         style={{
-          marginLeft: '0.5rem',
-          paddingLeft: '0',
-          listStyle: 'none',
-          fontSize: '0.8rem',
+          marginLeft: "0.5rem",
+          paddingLeft: "0",
+          listStyle: "none",
+          fontSize: "0.8rem",
         }}
       >
         {groupCounts
@@ -76,20 +76,20 @@ export default function App() {
               return {
                 firstItemsIndexes: [...firstItemsIndexes, offset],
                 offset: offset + count,
-              }
+              };
             },
-            { firstItemsIndexes: [], offset: 0 }
+            { firstItemsIndexes: [], offset: 0 },
           )
           .firstItemsIndexes.map((itemIndex, index) => (
             <li key={index}>
               <a
                 href="#"
-                style={{ color: 'var(--foreground)', padding: '0.5rem' }}
+                style={{ color: "var(--foreground)", padding: "0.5rem" }}
                 onClick={(e) => {
-                  e.preventDefault()
+                  e.preventDefault();
                   virtuoso.current.scrollToIndex({
                     index: itemIndex,
-                  })
+                  });
                 }}
               >
                 {groups[index]}
@@ -98,6 +98,6 @@ export default function App() {
           ))}
       </ul>
     </div>
-  )
+  );
 }
 ```

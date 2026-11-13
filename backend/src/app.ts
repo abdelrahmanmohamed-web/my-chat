@@ -53,7 +53,9 @@ export function createApp(logger: Logger): Express {
   // Mount main API routes
   app.use("/api", routesRouter);
 
-  app.use((_req, res) => { res.status(404).json({ error: "Not found" }); });
+  app.use((_req, res) => {
+    res.status(404).json({ error: "Not found" });
+  });
 
   // Attach centralized error handler at the end of the middleware chain
   app.use(createErrorHandler(logger));

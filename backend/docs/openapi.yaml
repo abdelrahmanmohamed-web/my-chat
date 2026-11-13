@@ -36,7 +36,7 @@ paths:
         - Health
       operationId: getHealth
       summary: Liveness check
-      description: "Returns `{ status: \"ok\" }` when the HTTP server is responsive."
+      description: 'Returns `{ status: "ok" }` when the HTTP server is responsive.'
       security: []
       x-rate-limit:
         - limiter: global

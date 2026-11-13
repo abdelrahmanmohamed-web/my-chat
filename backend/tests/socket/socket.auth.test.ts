@@ -216,7 +216,9 @@ describe("WebSocket Authentication (socket.auth.ts)", () => {
         });
       });
 
-      expect(err.message).toContain("Unauthorized: Missing authorization header");
+      expect(err.message).toContain(
+        "Unauthorized: Missing authorization header",
+      );
       client.close();
     });
 

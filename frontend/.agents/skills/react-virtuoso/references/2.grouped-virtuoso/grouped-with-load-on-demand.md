@@ -17,85 +17,94 @@ For example, if you have `[10, 10, 10, 10]` groups in total, slicing them to 23 
 The `setTimeout` delay is just for illustrative purposes - in reality, the data will be fetched from a remote source.
 
 ```tsx live
-import { GroupedVirtuoso } from 'react-virtuoso'
-import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
+import { GroupedVirtuoso } from "react-virtuoso";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 
 export default function App() {
   const { users, groups, groupCounts } = useMemo(() => {
-    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
     const users = letters.flatMap((letter) => {
       return Array.from({ length: 20 }, (_, index) => ({
         name: `${letter} User ${index}`,
         initials: `${letter}${index}`,
         description: `Description for user ${index}`,
-      }))
-    })
+      }));
+    });
 
     const groups = Array.from({ length: 10 }, (_, index) => {
-      return letters[index]
-    })
+      return letters[index];
+    });
 
     const groupCounts = groups.map((letter, index) => {
-      return users.filter((user, userIndex) => user.name.startsWith(letter)).length
-    })
-    return { users, groups, groupCounts }
-  }, [])
+      return users.filter((user, userIndex) => user.name.startsWith(letter))
+        .length;
+    });
+    return { users, groups, groupCounts };
+  }, []);
 
   const calculateGroupsSoFar = useCallback((totalGroups, count) => {
-    const groups = []
-    let i = 0
+    const groups = [];
+    let i = 0;
     while (count > 0 && i < totalGroups.length) {
-      const group = totalGroups[i]
-      groups.push(Math.min(group, count))
-      count -= group
-      i++
+      const group = totalGroups[i];
+      groups.push(Math.min(group, count));
+      count -= group;
+      i++;
     }
-    return groups
-  }, [])
+    return groups;
+  }, []);
 
-  const [currentGroupCounts, setCurrentGroupCounts] = useState([])
-  const loadedItems = useRef(0)
-  const [loading, setLoading] = useState(false)
+  const [currentGroupCounts, setCurrentGroupCounts] = useState([]);
+  const loadedItems = useRef(0);
+  const [loading, setLoading] = useState(false);
 
   const loadMore = useCallback(() => {
-    setLoading(true)
+    setLoading(true);
     return setTimeout(() => {
-      loadedItems.current += 50
-      setLoading(false)
-      setCurrentGroupCounts(calculateGroupsSoFar(groupCounts, loadedItems.current))
-    }, 500)
-  }, [])
+      loadedItems.current += 50;
+      setLoading(false);
+      setCurrentGroupCounts(
+        calculateGroupsSoFar(groupCounts, loadedItems.current),
+      );
+    }, 500);
+  }, []);
 
   useEffect(() => {
-    const timeoutRef = loadMore()
-    return () => clearTimeout(timeoutRef)
-  }, [])
+    const timeoutRef = loadMore();
+    return () => clearTimeout(timeoutRef);
+  }, []);
 
   return (
     <GroupedVirtuoso
-      style={{ height: '100%' }}
+      style={{ height: "100%" }}
       groupCounts={currentGroupCounts}
-      groupContent={(index) => <div style={{ backgroundColor: 'var(--background)', paddingTop: '1rem' }}>Group {groups[index]}</div>}
+      groupContent={(index) => (
+        <div
+          style={{ backgroundColor: "var(--background)", paddingTop: "1rem" }}
+        >
+          Group {groups[index]}
+        </div>
+      )}
       itemContent={(index) => <div>{users[index].name}</div>}
       components={{
         Footer: () => {
           return (
             <div
               style={{
-                padding: '2rem',
-                display: 'flex',
-                justifyContent: 'center',
+                padding: "2rem",
+                display: "flex",
+                justifyContent: "center",
               }}
             >
               <button disabled={loading} onClick={loadMore}>
-                {loading ? 'Loading...' : 'Press to load more'}
+                {loading ? "Loading..." : "Press to load more"}
               </button>
             </div>
-          )
+          );
         },
       }}
     />
-  )
+  );
 }
 ```

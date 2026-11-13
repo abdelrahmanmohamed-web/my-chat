@@ -13,8 +13,12 @@ description: >-
 `react-virtuoso` renders only the visible portion of large lists, grids, and tables. It measures item sizes automatically with ResizeObserver — variable item heights work out of the box, with no size configuration.
 
 ```tsx
-import { Virtuoso } from 'react-virtuoso'
-;<Virtuoso style={{ height: '100%' }} data={users} itemContent={(index, user) => <div>{user.name}</div>} />
+import { Virtuoso } from "react-virtuoso";
+<Virtuoso
+  style={{ height: "100%" }}
+  data={users}
+  itemContent={(index, user) => <div>{user.name}</div>}
+/>;
 ```
 
 ## Picking the right component
@@ -54,7 +58,11 @@ Unlike TanStack Virtual or react-window, react-virtuoso measures items itself. D
 ### Infinite scrolling
 
 ```tsx
-<Virtuoso data={items} endReached={() => loadMore()} itemContent={(index, item) => <Item item={item} />} />
+<Virtuoso
+  data={items}
+  endReached={() => loadMore()}
+  itemContent={(index, item) => <Item item={item} />}
+/>
 ```
 
 `endReached` fires at the bottom; render a spinner via `components.Footer`. For "load more" on click, put the button in `Footer`.
@@ -95,8 +103,8 @@ const prepend = async () => {
 ### Scrolling programmatically
 
 ```tsx
-const ref = useRef<VirtuosoHandle>(null)
-ref.current?.scrollToIndex({ index: 500, align: 'center', behavior: 'smooth' })
+const ref = useRef<VirtuosoHandle>(null);
+ref.current?.scrollToIndex({ index: 500, align: "center", behavior: "smooth" });
 ```
 
 Also on the handle: `scrollIntoView` (only scrolls if not visible — right for keyboard navigation), `scrollTo`/`scrollBy` (pixel-based), and `getState` (snapshot for `restoreStateFrom` when remounting, e.g. back navigation).
@@ -150,9 +158,13 @@ JSDOM has no layout, so items will not render in Jest/Vitest without mocked meas
 ```tsx
 render(<Virtuoso data={data} />, {
   wrapper: ({ children }) => (
-    <VirtuosoMockContext.Provider value={{ viewportHeight: 300, itemHeight: 100 }}>{children}</VirtuosoMockContext.Provider>
+    <VirtuosoMockContext.Provider
+      value={{ viewportHeight: 300, itemHeight: 100 }}
+    >
+      {children}
+    </VirtuosoMockContext.Provider>
   ),
-})
+});
 ```
 
 Use `VirtuosoGridMockContext` (adds `viewportWidth`, `itemWidth`) for grids. Prefer real-browser tests (Playwright) for scroll behavior.

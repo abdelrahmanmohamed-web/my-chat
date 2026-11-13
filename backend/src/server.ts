@@ -7,7 +7,10 @@ import pino from "pino";
 import { env } from "./config/env.ts";
 import { createApp } from "./app.ts";
 import { connectMongoDB, disconnectMongoDB } from "./infrastructure/mongodb.ts";
-import { initSocketServer, closeSocketServer } from "./infrastructure/socket.ts";
+import {
+  initSocketServer,
+  closeSocketServer,
+} from "./infrastructure/socket.ts";
 
 const logger = pino({
   level: env.logLevel,

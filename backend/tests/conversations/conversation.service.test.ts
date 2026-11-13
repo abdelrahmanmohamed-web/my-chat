@@ -71,9 +71,12 @@ describe("Conversation Service (conversation.service.ts)", () => {
 
   describe("createOrRestoreDirectConversation", () => {
     it("should reject creation with 'invalid' if user IDs are not valid ObjectIds", async () => {
-      const invalidRes1 = await createOrRestoreDirectConversation("invalid-id", {
-        participantId: userBId,
-      });
+      const invalidRes1 = await createOrRestoreDirectConversation(
+        "invalid-id",
+        {
+          participantId: userBId,
+        },
+      );
       expect(invalidRes1.kind).toBe("invalid");
 
       const invalidRes2 = await createOrRestoreDirectConversation(userAId, {
@@ -109,7 +112,9 @@ describe("Conversation Service (conversation.service.ts)", () => {
       expect(res.created).toBe(true);
       expect(res.conversation).toBeDefined();
       expect(res.conversation.type).toBe("direct");
-      expect(res.conversation.directKey).toBe(directConversationKey(userAId, userBId));
+      expect(res.conversation.directKey).toBe(
+        directConversationKey(userAId, userBId),
+      );
       expect(res.conversation.participantIds.map(String)).toContain(userAId);
       expect(res.conversation.participantIds.map(String)).toContain(userBId);
       expect(res.conversation.hiddenFor).toEqual([]);
@@ -136,7 +141,9 @@ describe("Conversation Service (conversation.service.ts)", () => {
       if (second.kind !== "ok") return;
 
       expect(second.created).toBe(false);
-      expect(second.conversation._id.toString()).toBe(first.conversation._id.toString());
+      expect(second.conversation._id.toString()).toBe(
+        first.conversation._id.toString(),
+      );
       expect(second.conversation.name).toBe("User A");
 
       // Ensure no duplicate conversation was created in DB
@@ -186,7 +193,9 @@ describe("Conversation Service (conversation.service.ts)", () => {
       await hideConversation(userBId, convId);
 
       // Only User A restores
-      await createOrRestoreDirectConversation(userAId, { participantId: userBId });
+      await createOrRestoreDirectConversation(userAId, {
+        participantId: userBId,
+      });
 
       const conv = await Conversation.findById(convId);
       expect(conv?.hiddenFor.map(String)).not.toContain(userAId);
@@ -197,22 +206,32 @@ describe("Conversation Service (conversation.service.ts)", () => {
   describe("listVisibleConversations", () => {
     it("should return only conversations where the user is a participant and not hidden", async () => {
       // Conversation 1: between A and B
-      const conv1Res = await createOrRestoreDirectConversation(userAId, { participantId: userBId });
+      const conv1Res = await createOrRestoreDirectConversation(userAId, {
+        participantId: userBId,
+      });
       expect(conv1Res.kind).toBe("ok");
 
       // Conversation 2: between A and C
-      const conv2Res = await createOrRestoreDirectConversation(userAId, { participantId: userCId });
+      const conv2Res = await createOrRestoreDirectConversation(userAId, {
+        participantId: userCId,
+      });
       expect(conv2Res.kind).toBe("ok");
 
       // Conversation 3: between B and C (User A is NOT a participant)
-      const conv3Res = await createOrRestoreDirectConversation(userBId, { participantId: userCId });
+      const conv3Res = await createOrRestoreDirectConversation(userBId, {
+        participantId: userCId,
+      });
       expect(conv3Res.kind).toBe("ok");
 
       // List for User A
       const listA = await listVisibleConversations(userAId);
       expect(listA).toHaveLength(2);
       const listAIds = listA.map((c) => c._id.toString());
-      if (conv1Res.kind === "ok" && conv2Res.kind === "ok" && conv3Res.kind === "ok") {
+      if (
+        conv1Res.kind === "ok" &&
+        conv2Res.kind === "ok" &&
+        conv3Res.kind === "ok"
+      ) {
         expect(listAIds).toContain(conv1Res.conversation._id.toString());
         expect(listAIds).toContain(conv2Res.conversation._id.toString());
         expect(listAIds).not.toContain(conv3Res.conversation._id.toString());
@@ -220,8 +239,12 @@ describe("Conversation Service (conversation.service.ts)", () => {
     });
 
     it("should exclude conversations that user has hidden", async () => {
-      const conv1Res = await createOrRestoreDirectConversation(userAId, { participantId: userBId });
-      const conv2Res = await createOrRestoreDirectConversation(userAId, { participantId: userCId });
+      const conv1Res = await createOrRestoreDirectConversation(userAId, {
+        participantId: userBId,
+      });
+      const conv2Res = await createOrRestoreDirectConversation(userAId, {
+        participantId: userCId,
+      });
 
       if (conv1Res.kind !== "ok" || conv2Res.kind !== "ok") return;
 
@@ -231,17 +254,23 @@ describe("Conversation Service (conversation.service.ts)", () => {
       // User A's list should only have conv2
       const listA = await listVisibleConversations(userAId);
       expect(listA).toHaveLength(1);
-      expect(listA[0]._id.toString()).toBe(conv2Res.conversation._id.toString());
+      expect(listA[0]._id.toString()).toBe(
+        conv2Res.conversation._id.toString(),
+      );
 
       // But User B should still see conv1
       const listB = await listVisibleConversations(userBId);
       expect(listB).toHaveLength(1);
-      expect(listB[0]._id.toString()).toBe(conv1Res.conversation._id.toString());
+      expect(listB[0]._id.toString()).toBe(
+        conv1Res.conversation._id.toString(),
+      );
     });
 
     it("should automatically set conversation name to counterpart's displayName for both users", async () => {
       // Create conversation between User A and User B
-      await createOrRestoreDirectConversation(userAId, { participantId: userBId });
+      await createOrRestoreDirectConversation(userAId, {
+        participantId: userBId,
+      });
 
       // User A views conversations: name should be User B's displayName
       const listA = await listVisibleConversations(userAId);
@@ -255,7 +284,9 @@ describe("Conversation Service (conversation.service.ts)", () => {
     });
 
     it("should dynamically reflect counterpart displayName changes", async () => {
-      await createOrRestoreDirectConversation(userAId, { participantId: userBId });
+      await createOrRestoreDirectConversation(userAId, {
+        participantId: userBId,
+      });
 
       // Update User B's displayName in the database
       await User.updateOne({ _id: userBId }, { displayName: "Updated User B" });
@@ -273,16 +304,23 @@ describe("Conversation Service (conversation.service.ts)", () => {
     });
 
     it("should return false if caller is not a participant in the conversation", async () => {
-      const convRes = await createOrRestoreDirectConversation(userAId, { participantId: userBId });
+      const convRes = await createOrRestoreDirectConversation(userAId, {
+        participantId: userBId,
+      });
       if (convRes.kind !== "ok") return;
 
       // User C attempts to hide A-B conversation
-      const res = await hideConversation(userCId, convRes.conversation._id.toString());
+      const res = await hideConversation(
+        userCId,
+        convRes.conversation._id.toString(),
+      );
       expect(res).toBe(false);
     });
 
     it("should add user to hiddenFor idempotently and return true", async () => {
-      const convRes = await createOrRestoreDirectConversation(userAId, { participantId: userBId });
+      const convRes = await createOrRestoreDirectConversation(userAId, {
+        participantId: userBId,
+      });
       if (convRes.kind !== "ok") return;
 
       const convId = convRes.conversation._id.toString();
@@ -302,22 +340,32 @@ describe("Conversation Service (conversation.service.ts)", () => {
 
   describe("updateConversation", () => {
     it("should return null for invalid conversation ID", async () => {
-      const res = await updateConversation(userAId, "invalid-conv-id", { name: "Test" });
-      expect(res).toBeNull();
-    });
-
-    it("should return null if user is not a participant", async () => {
-      const convRes = await createOrRestoreDirectConversation(userAId, { participantId: userBId });
-      if (convRes.kind !== "ok") return;
-
-      const res = await updateConversation(userCId, convRes.conversation._id.toString(), {
-        name: "Hacked Name",
+      const res = await updateConversation(userAId, "invalid-conv-id", {
+        name: "Test",
       });
       expect(res).toBeNull();
     });
 
+    it("should return null if user is not a participant", async () => {
+      const convRes = await createOrRestoreDirectConversation(userAId, {
+        participantId: userBId,
+      });
+      if (convRes.kind !== "ok") return;
+
+      const res = await updateConversation(
+        userCId,
+        convRes.conversation._id.toString(),
+        {
+          name: "Hacked Name",
+        },
+      );
+      expect(res).toBeNull();
+    });
+
     it("should update name and avatarUrl successfully when user is a participant", async () => {
-      const convRes = await createOrRestoreDirectConversation(userAId, { participantId: userBId });
+      const convRes = await createOrRestoreDirectConversation(userAId, {
+        participantId: userBId,
+      });
       if (convRes.kind !== "ok") return;
 
       const convId = convRes.conversation._id.toString();
@@ -339,7 +387,9 @@ describe("Conversation Service (conversation.service.ts)", () => {
     });
 
     it("should fall back to counterpart displayName when custom name is reset to null", async () => {
-      const convRes = await createOrRestoreDirectConversation(userAId, { participantId: userBId });
+      const convRes = await createOrRestoreDirectConversation(userAId, {
+        participantId: userBId,
+      });
       if (convRes.kind !== "ok") return;
 
       const convId = convRes.conversation._id.toString();
@@ -390,7 +440,10 @@ describe("Conversation Service (conversation.service.ts)", () => {
       expect(byEmail[0].username).toBe("user_b");
 
       // Should exclude the requesting user even if query matches them
-      const excludeSelf = await searchUsers(userAId, { q: "user_a", limit: 20 });
+      const excludeSelf = await searchUsers(userAId, {
+        q: "user_a",
+        limit: 20,
+      });
       expect(excludeSelf).toHaveLength(0);
     });
 
@@ -402,11 +455,17 @@ describe("Conversation Service (conversation.service.ts)", () => {
         passwordHash: "dummy-hash",
       });
 
-      const specialMatch = await searchUsers(userAId, { q: "ali+work@", limit: 20 });
+      const specialMatch = await searchUsers(userAId, {
+        q: "ali+work@",
+        limit: 20,
+      });
       expect(specialMatch).toHaveLength(1);
       expect(specialMatch[0].email).toBe("ali+work@example.com");
 
-      const regexCharsNoMatch = await searchUsers(userAId, { q: "[a-z]+", limit: 20 });
+      const regexCharsNoMatch = await searchUsers(userAId, {
+        q: "[a-z]+",
+        limit: 20,
+      });
       expect(regexCharsNoMatch).toEqual([]);
 
       const limited = await searchUsers(userAId, { q: "user_", limit: 1 });
