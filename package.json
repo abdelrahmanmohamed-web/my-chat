@@ -26,11 +26,14 @@
     "dev:front": "npm run dev --workspace=@my-app/frontend",
     "dev:back": "npm run dev --workspace=@my-app/backend",
     "build": "npm run build --workspaces --if-present",
+    "build:back": "npm run build --workspace=@my-app/backend",
+    "build:front": "npm run build --workspace=@my-app/frontend",
+    "start": "node backend/dist/server.js",
     "lint": "npm run lint --workspaces --if-present",
     "format": "prettier --write .",
     "check": "npm run lint && npm run build",
     "sync:api": "npm --workspace=@my-app/backend run generate:openapi && npm --workspace=@my-app/frontend run gen:api",
-    "prepare": "husky"
+    "prepare": "node -e \"if (process.env.NODE_ENV !== 'production' && !process.env.CI) import('husky').then(m => m.default()).catch(() => {})\""
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
