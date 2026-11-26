@@ -2,6 +2,7 @@ export {
   AUTH_ENDPOINTS,
   CONVERSATION_ENDPOINTS,
   MESSAGE_ENDPOINTS,
+  PUSH_ENDPOINTS,
   SESSION_ENDPOINTS,
   USER_ENDPOINTS,
 } from "./endpoints";
@@ -46,4 +47,11 @@ export {
   markMessageReadRest,
   sendMessageRest,
 } from "./services/messages";
+export {
+  deletePushSubscription,
+  getVapidPublicKey,
+  savePushSubscription,
+  type PushSubscriptionPayload,
+  type VapidPublicKeyResponse,
+} from "./services/push";
 export { getUsersBatch, searchUsers } from "./services/users";

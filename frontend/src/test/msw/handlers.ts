@@ -120,4 +120,26 @@ export const authHandlers = [
       return HttpResponse.json({ status: "ok" });
     },
   ),
+
+  http.get("*/api/push/vapid-public-key", () => {
+    return HttpResponse.json({
+      publicKey:
+        "BM5jnDloKWAWu75F0fmSuWRqD4RGbbjqBxLrRsOI24V4oFxBt3TKaHUmq8hUH-2Ar_h-VKhsoBoYAP5M6OISvf4",
+    });
+  }),
+
+  http.post("*/api/push/subscriptions", async ({ request }) => {
+    const body = (await request.json()) as { endpoint?: string };
+    return HttpResponse.json({
+      subscription: {
+        id: "push-sub-1",
+        endpoint: body.endpoint ?? "https://push.example.com/sub/1",
+        createdAt: new Date().toISOString(),
+      },
+    });
+  }),
+
+  http.delete("*/api/push/subscriptions", () => {
+    return new HttpResponse(null, { status: 204 });
+  }),
 ];

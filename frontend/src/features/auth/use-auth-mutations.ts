@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { QUERY_KEYS } from "@/app/query-client";
 import { ROUTES } from "@/app/routes";
+import { cleanupPushSubscriptionOnLogout } from "@/features/notifications";
 import {
   changePassword,
   getCurrentUser,
@@ -84,6 +85,7 @@ export function useLogoutMutation() {
   return useMutation({
     mutationFn: async () => {
       try {
+        await cleanupPushSubscriptionOnLogout();
         await logoutUser();
       } finally {
         useDraftStore.getState().clearDrafts();

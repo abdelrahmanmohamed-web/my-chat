@@ -8,7 +8,11 @@
 
 import { Router } from "express";
 
-import { getSocketServer } from "../../infrastructure/socket.ts";
+import {
+  type AppSocketServer,
+  getSocketServer,
+} from "../../infrastructure/socket.ts";
+import { notifyMessageCreated } from "./message.notifications.ts";
 import {
   listMessages,
   markMessageAsRead,
@@ -71,18 +75,22 @@ messageRouter.post("/", async (req, res, next) => {
 
     const statusCode = result.duplicate ? 200 : 201;
 
-    // Emit once per participant personal room to avoid duplicate delivery when also in conversation room
+    let io: AppSocketServer | null = null;
     try {
-      const io = getSocketServer();
-      for (const pId of result.participantUserIds) {
-        io.to(`user:${pId}`).emit("message:new", {
-          conversationId,
-          message: result.message,
-        });
-      }
+      io = getSocketServer();
     } catch {
       // Ignored if socket server is uninitialized in standalone scripts
     }
+
+    notifyMessageCreated({
+      conversationId,
+      senderId: userId,
+      message: result.message,
+      participantUserIds: result.participantUserIds,
+      duplicate: result.duplicate,
+      io,
+      logger: req.log,
+    });
 
     return res.status(statusCode).json({ message: result.message });
   } catch (error) {

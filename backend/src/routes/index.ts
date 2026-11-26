@@ -8,6 +8,7 @@
  * - Session management routes protected by requireAuth (/sessions).
  * - User search routes protected by requireAuth (/users).
  * - Conversation routes protected by requireAuth (/conversations).
+ * - Web Push subscription routes protected by requireAuth (/push).
  * ============================================================================
  */
 
@@ -22,6 +23,7 @@ import {
   conversationRouter,
   userSearchRouter,
 } from "../modules/conversations/index.ts";
+import { pushRouter } from "../modules/push/index.ts";
 import { healthRouter } from "./health.routes.ts";
 
 export const routesRouter = Router();
@@ -40,3 +42,6 @@ routesRouter.use("/users", requireAuth, userSearchRouter);
 
 // Conversation management routes (protected by requireAuth)
 routesRouter.use("/conversations", requireAuth, conversationRouter);
+
+// Web Push subscription management routes (protected by requireAuth)
+routesRouter.use("/push", requireAuth, pushRouter);

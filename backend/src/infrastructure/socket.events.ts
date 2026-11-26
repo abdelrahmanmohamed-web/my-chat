@@ -16,11 +16,17 @@ import {
   isParticipant,
 } from "../modules/conversations/conversation.access.ts";
 import { Conversation } from "../modules/conversations/conversation.model.ts";
+import { notifyMessageCreated } from "../modules/messages/message.notifications.ts";
 import {
   markMessageAsRead,
   sendMessage,
 } from "../modules/messages/message.service.ts";
 import { sendMessageSchema } from "../modules/messages/message.schemas.ts";
+import {
+  addUserSocket,
+  isUserConnected,
+  removeUserSocket,
+} from "./socket.presence.ts";
 import type { AppSocketServer } from "./socket.ts";
 import type {
   ClientToServerEvents,
@@ -29,15 +35,14 @@ import type {
   SocketData,
 } from "../types/socket.ts";
 
+export { isUserConnected };
+
 type AppSocket = Socket<
   ClientToServerEvents,
   ServerToClientEvents,
   InterServerEvents,
   SocketData
 >;
-
-// In-memory mapping of active connected socket IDs per user
-const activeUserSockets = new Map<string, Set<string>>();
 
 /**
  * Broadcasts user presence (online/offline) only to participants of shared direct conversations.
@@ -87,11 +92,9 @@ export function registerSocketEvents(
   if (!userId) return;
 
   // 1. Presence Tracking (User Online)
-  if (!activeUserSockets.has(userId)) {
-    activeUserSockets.set(userId, new Set());
+  if (addUserSocket(userId, socket.id)) {
     void broadcastPresence(io, userId, "online", logger);
   }
-  activeUserSockets.get(userId)!.add(socket.id);
 
   // 2. Join Conversation Room
   socket.on("join:conversation", async (conversationId, ack) => {
@@ -157,13 +160,15 @@ export function registerSocketEvents(
         data: { message: result.message, duplicate: result.duplicate },
       });
 
-      // Emit once per participant personal room to avoid duplicate delivery when also in conversation room
-      for (const pId of result.participantUserIds) {
-        io.to(`user:${pId}`).emit("message:new", {
-          conversationId: payload.conversationId,
-          message: result.message,
-        });
-      }
+      notifyMessageCreated({
+        conversationId: payload.conversationId,
+        senderId: userId,
+        message: result.message,
+        participantUserIds: result.participantUserIds,
+        duplicate: result.duplicate,
+        io,
+        logger,
+      });
     } catch (error) {
       logger.error({ err: error }, "Error sending message via WebSocket");
       ack?.({ status: "error", error: "Internal server error" });
@@ -228,13 +233,8 @@ export function registerSocketEvents(
 
   // 7. Presence Tracking (User Disconnect)
   socket.on("disconnect", () => {
-    const userSockets = activeUserSockets.get(userId);
-    if (userSockets) {
-      userSockets.delete(socket.id);
-      if (userSockets.size === 0) {
-        activeUserSockets.delete(userId);
-        void broadcastPresence(io, userId, "offline", logger);
-      }
+    if (removeUserSocket(userId, socket.id)) {
+      void broadcastPresence(io, userId, "offline", logger);
     }
   });
 }

@@ -48,3 +48,8 @@ export const MESSAGE_ENDPOINTS = {
   markRead: (conversationId: string, messageId: string): string =>
     `/api/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/read`,
 } as const;
+
+export const PUSH_ENDPOINTS = {
+  vapidPublicKey: "/api/push/vapid-public-key",
+  subscriptions: "/api/push/subscriptions",
+} as const;

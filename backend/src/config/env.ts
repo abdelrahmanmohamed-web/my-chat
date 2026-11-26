@@ -21,6 +21,9 @@ export const env = {
   loginRateLimit: parsed.AUTH_LOGIN_RATE_LIMIT,
   registerRateLimit: parsed.AUTH_REGISTER_RATE_LIMIT,
   refreshRateLimit: parsed.AUTH_REFRESH_RATE_LIMIT,
+  vapidPublicKey: parsed.VAPID_PUBLIC_KEY,
+  vapidPrivateKey: parsed.VAPID_PRIVATE_KEY,
+  vapidSubject: parsed.VAPID_SUBJECT,
   nodeEnv: parsed.NODE_ENV,
   isProduction: parsed.NODE_ENV === "production",
 } as const;

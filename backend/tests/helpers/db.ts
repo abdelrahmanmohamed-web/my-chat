@@ -3,6 +3,7 @@ import { User } from "../../src/modules/users/user.model.ts";
 import { Session } from "../../src/modules/auth/sessions/session.model.ts";
 import { Conversation } from "../../src/modules/conversations/conversation.model.ts";
 import { Message } from "../../src/modules/messages/message.model.ts";
+import { PushSubscription } from "../../src/modules/push/push.model.ts";
 import { env } from "../../src/config/env.ts";
 
 export function checkSafetyGuard(): void {
@@ -30,6 +31,7 @@ export async function connectTestDB(): Promise<void> {
     User.createIndexes(),
     Session.createIndexes(),
     Conversation.createIndexes(),
+    PushSubscription.createIndexes(),
   ]);
 }
 
@@ -40,6 +42,7 @@ export async function clearTestDB(): Promise<void> {
     Session.deleteMany({}),
     Conversation.deleteMany({}),
     Message.deleteMany({}),
+    PushSubscription.deleteMany({}),
   ]);
 }
 

@@ -104,6 +104,39 @@ export const envSchema = z
     AUTH_REGISTER_RATE_LIMIT: positiveIntWithDefault(10),
 
     AUTH_REFRESH_RATE_LIMIT: positiveIntWithDefault(30),
+
+    VAPID_PUBLIC_KEY: z.preprocess(
+      (val) =>
+        val === undefined || val === null || val === "" ? undefined : val,
+      z.string().trim().min(1, "VAPID_PUBLIC_KEY cannot be empty").optional(),
+    ),
+
+    VAPID_PRIVATE_KEY: z.preprocess(
+      (val) =>
+        val === undefined || val === null || val === "" ? undefined : val,
+      z.string().trim().min(1, "VAPID_PRIVATE_KEY cannot be empty").optional(),
+    ),
+
+    VAPID_SUBJECT: z
+      .preprocess(
+        (val) =>
+          val === undefined || val === null || val === "" ? undefined : val,
+        z.string().trim().optional(),
+      )
+      .refine(
+        (val) => {
+          if (val === undefined) return true;
+          try {
+            const url = new URL(val);
+            return url.protocol === "mailto:" || url.protocol === "https:";
+          } catch {
+            return false;
+          }
+        },
+        {
+          message: "VAPID_SUBJECT must be a valid 'mailto:' or 'https:' URL",
+        },
+      ),
   })
   .refine((data) => Buffer.byteLength(data.ACCESS_TOKEN_SECRET ?? "") >= 32, {
     message: "ACCESS_TOKEN_SECRET must be at least 32 bytes in length",
@@ -116,7 +149,25 @@ export const envSchema = z
   .refine((data) => data.ACCESS_TOKEN_SECRET !== data.REFRESH_TOKEN_SECRET, {
     message: "REFRESH_TOKEN_SECRET must differ from ACCESS_TOKEN_SECRET",
     path: ["REFRESH_TOKEN_SECRET"],
-  });
+  })
+  .refine(
+    (data) =>
+      Boolean(data.VAPID_PUBLIC_KEY) === Boolean(data.VAPID_PRIVATE_KEY),
+    {
+      message:
+        "VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must both be provided together",
+      path: ["VAPID_PUBLIC_KEY"],
+    },
+  )
+  .refine(
+    (data) =>
+      (!data.VAPID_PUBLIC_KEY && !data.VAPID_PRIVATE_KEY) ||
+      Boolean(data.VAPID_SUBJECT),
+    {
+      message: "VAPID_SUBJECT is required when VAPID keys are configured",
+      path: ["VAPID_SUBJECT"],
+    },
+  );
 
 export type ValidatedEnv = z.infer<typeof envSchema>;
 

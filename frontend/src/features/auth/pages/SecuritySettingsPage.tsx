@@ -21,6 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuthStore } from "@/stores";
 import { mapAuthApiErrorMessage, formatSessionTimestamp } from "../auth.utils";
+import { PushNotificationsCard } from "@/features/notifications";
 import { ChangePasswordCard } from "../components/ChangePasswordCard";
 import { ProfileAvatarCard } from "../components/ProfileAvatarCard";
 import { SessionCard } from "../components/SessionCard";
@@ -101,6 +102,8 @@ export function SecuritySettingsPage() {
         )}
 
         <ProfileAvatarCard />
+
+        <PushNotificationsCard />
 
         <Card>
           <CardHeader className="text-start">
