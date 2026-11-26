@@ -15,13 +15,17 @@
  * ============================================================================
  */
 
-import express, { Router } from "express";
+import { Router } from "express";
 
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   getRefreshCookieOptions,
   REFRESH_COOKIE_NAME,
 } from "../../config/auth-config.ts";
+import {
+  avatarUploadParser,
+  extractAvatarDataUrl,
+} from "../../shared/middleware/avatar.upload.ts";
 import {
   loginRateLimiter,
   refreshRateLimiter,
@@ -49,65 +53,6 @@ import {
 import { rotateSessionToken } from "./sessions/session.service.ts";
 
 export const authRouter = Router();
-
-const SUPPORTED_AVATAR_TYPES = [
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "image/gif",
-] as const;
-
-type SupportedAvatarMime = (typeof SUPPORTED_AVATAR_TYPES)[number];
-
-const avatarUploadParser = express.raw({
-  type: [...SUPPORTED_AVATAR_TYPES],
-  limit: "2mb",
-});
-
-/**
- * Inspects image magic bytes so uploaded files are verified by content, not only Content-Type.
- */
-function detectImageMimeType(buffer: Buffer): SupportedAvatarMime | null {
-  if (
-    buffer.length >= 8 &&
-    buffer[0] === 0x89 &&
-    buffer[1] === 0x50 &&
-    buffer[2] === 0x4e &&
-    buffer[3] === 0x47 &&
-    buffer[4] === 0x0d &&
-    buffer[5] === 0x0a &&
-    buffer[6] === 0x1a &&
-    buffer[7] === 0x0a
-  ) {
-    return "image/png";
-  }
-
-  if (
-    buffer.length >= 3 &&
-    buffer[0] === 0xff &&
-    buffer[1] === 0xd8 &&
-    buffer[2] === 0xff
-  ) {
-    return "image/jpeg";
-  }
-
-  if (buffer.length >= 6) {
-    const header6 = buffer.subarray(0, 6).toString("ascii");
-    if (header6 === "GIF87a" || header6 === "GIF89a") {
-      return "image/gif";
-    }
-  }
-
-  if (
-    buffer.length >= 12 &&
-    buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
-    buffer.subarray(8, 12).toString("ascii") === "WEBP"
-  ) {
-    return "image/webp";
-  }
-
-  return null;
-}
 
 // ============================================================================
 // Registration, Login, Token Refresh & Logout
@@ -306,16 +251,11 @@ authRouter.put(
   requireAuth,
   avatarUploadParser,
   async (req, res) => {
-    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+    const dataUrl = extractAvatarDataUrl(req.body);
+    if (!dataUrl) {
       return res.status(400).json({ error: "Invalid avatar image" });
     }
 
-    const detectedMime = detectImageMimeType(req.body);
-    if (!detectedMime) {
-      return res.status(400).json({ error: "Invalid avatar image" });
-    }
-
-    const dataUrl = `data:${detectedMime};base64,${req.body.toString("base64")}`;
     const user = await updateUserAvatar(req.user!.id, dataUrl);
     if (!user) return res.status(401).json({ error: "Unauthorized" });
 

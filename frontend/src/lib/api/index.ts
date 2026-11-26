@@ -35,9 +35,11 @@ export {
   hideConversation,
   leaveGroupConversation,
   listConversations,
+  removeGroupAvatar,
   removeGroupParticipant,
   updateConversation,
   updateGroupParticipantRole,
+  uploadGroupAvatar,
 } from "./services/conversations";
 export {
   listMessages,

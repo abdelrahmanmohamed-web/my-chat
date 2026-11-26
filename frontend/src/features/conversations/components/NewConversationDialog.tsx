@@ -1,12 +1,21 @@
-import { useEffect, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import {
   CheckIcon,
+  ImagePlusIcon,
   MessageSquarePlusIcon,
   SearchIcon,
+  Trash2Icon,
   UsersIcon,
   XIcon,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +32,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { toApiError } from "@/lib/api";
 import {
+  ALLOWED_AVATAR_MIME_TYPES,
+  prepareAvatarUpload,
+} from "@/lib/avatar.utils";
+import { getAvatarInitials } from "@/lib/date";
+import {
   CONVERSATION_LIMITS,
   groupConversationSchema,
   type Conversation,
@@ -31,6 +45,7 @@ import {
 import {
   useCreateConversationMutation,
   useCreateDirectConversationMutation,
+  useUploadGroupAvatarMutation,
   useUserSearchQuery,
 } from "../use-conversations";
 import { ConversationAvatar } from "./ConversationAvatar";
@@ -56,7 +71,13 @@ export function NewConversationDialog({
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
 
   const [groupName, setGroupName] = useState("");
-  const [groupAvatarUrl, setGroupAvatarUrl] = useState("");
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const [groupAvatarBlob, setGroupAvatarBlob] = useState<{
+    blob: Blob;
+    mimeType: string;
+    previewUrl: string | null;
+  } | null>(null);
+  const [isPreparingAvatar, setIsPreparingAvatar] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<UserSearchResult[]>(
     [],
   );
@@ -72,13 +93,23 @@ export function NewConversationDialog({
     };
   }, [searchInput]);
 
+  function clearSelectedAvatar() {
+    setGroupAvatarBlob((prev) => {
+      if (prev?.previewUrl && typeof URL.revokeObjectURL === "function") {
+        URL.revokeObjectURL(prev.previewUrl);
+      }
+      return null;
+    });
+  }
+
   function resetState() {
     setMode("direct");
     setSearchInput("");
     setDebouncedQuery("");
     setPendingUserId(null);
     setGroupName("");
-    setGroupAvatarUrl("");
+    clearSelectedAvatar();
+    setIsPreparingAvatar(false);
     setSelectedMembers([]);
     setGroupError(null);
   }
@@ -93,6 +124,35 @@ export function NewConversationDialog({
   const searchQuery = useUserSearchQuery(open ? debouncedQuery : "");
   const createDirectMutation = useCreateDirectConversationMutation();
   const createConversationMutation = useCreateConversationMutation();
+  const uploadGroupAvatarMutation = useUploadGroupAvatarMutation();
+
+  async function handleGroupAvatarFileChange(
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    setGroupError(null);
+    setIsPreparingAvatar(true);
+    try {
+      const prepared = await prepareAvatarUpload(file);
+      const previewUrl =
+        typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+          ? URL.createObjectURL(prepared.blob)
+          : null;
+      clearSelectedAvatar();
+      setGroupAvatarBlob({ ...prepared, previewUrl });
+    } catch (error) {
+      setGroupError(
+        error instanceof Error ? error.message : "تعذر تجهيز ملف الصورة.",
+      );
+    } finally {
+      setIsPreparingAvatar(false);
+    }
+  }
 
   async function handleSelectUser(user: UserSearchResult) {
     if (mode === "group") {
@@ -123,13 +183,11 @@ export function NewConversationDialog({
   async function handleCreateGroup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedName = groupName.trim();
-    const trimmedAvatar = groupAvatarUrl.trim();
 
     const parsed = groupConversationSchema.safeParse({
       type: "group",
       name: trimmedName,
       participantIds: selectedMembers.map((m) => m.id),
-      avatarUrl: trimmedAvatar.length > 0 ? trimmedAvatar : undefined,
     });
 
     if (!parsed.success) {
@@ -144,8 +202,21 @@ export function NewConversationDialog({
       const { conversation } = await createConversationMutation.mutateAsync(
         parsed.data,
       );
+      let createdConversation = conversation;
+      if (groupAvatarBlob) {
+        try {
+          const uploaded = await uploadGroupAvatarMutation.mutateAsync({
+            conversationId: conversation._id,
+            blob: groupAvatarBlob.blob,
+            mimeType: groupAvatarBlob.mimeType,
+          });
+          createdConversation = uploaded.conversation;
+        } catch {
+          // Group was created; avatar upload error toast is handled by mutation.
+        }
+      }
       handleDialogOpenChange(false);
-      onConversationCreated(conversation);
+      onConversationCreated(createdConversation);
     } catch {
       // Handled centrally by mutation onError toast.
     }
@@ -156,7 +227,10 @@ export function NewConversationDialog({
     trimmedInput.length > 0 && trimmedInput !== debouncedQuery;
   const users = searchQuery.data ?? [];
   const isSubmitting =
-    createDirectMutation.isPending || createConversationMutation.isPending;
+    isPreparingAvatar ||
+    createDirectMutation.isPending ||
+    createConversationMutation.isPending ||
+    uploadGroupAvatarMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
@@ -224,18 +298,63 @@ export function NewConversationDialog({
               </Field>
 
               <Field>
-                <FieldLabel htmlFor="group-avatar-input">
-                  رابط صورة المجموعة (اختياري)
-                </FieldLabel>
-                <Input
-                  id="group-avatar-input"
-                  dir="ltr"
-                  placeholder="https://example.com/group.png"
-                  maxLength={CONVERSATION_LIMITS.avatarUrlMaxLength}
-                  value={groupAvatarUrl}
-                  onChange={(e) => setGroupAvatarUrl(e.target.value)}
-                  disabled={isSubmitting}
-                />
+                <FieldLabel>صورة المجموعة (اختياري)</FieldLabel>
+                <div className="flex items-center gap-3">
+                  <Avatar size="lg">
+                    {groupAvatarBlob?.previewUrl ? (
+                      <AvatarImage
+                        src={groupAvatarBlob.previewUrl}
+                        alt={groupName.trim() || "صورة المجموعة"}
+                      />
+                    ) : null}
+                    <AvatarFallback>
+                      {getAvatarInitials(groupName.trim() || "مجموعة")}
+                    </AvatarFallback>
+                  </Avatar>
+
+                  <input
+                    ref={avatarFileInputRef}
+                    type="file"
+                    accept={ALLOWED_AVATAR_MIME_TYPES.join(",")}
+                    aria-label="اختيار صورة المجموعة الجديدة"
+                    className="sr-only"
+                    disabled={isSubmitting}
+                    onChange={(e) => void handleGroupAvatarFileChange(e)}
+                  />
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isSubmitting}
+                    onClick={() => avatarFileInputRef.current?.click()}
+                  >
+                    <ImagePlusIcon
+                      data-icon="inline-start"
+                      aria-hidden="true"
+                    />
+                    <span>
+                      {groupAvatarBlob ? "تغيير الصورة" : "رفع صورة"}
+                    </span>
+                  </Button>
+
+                  {groupAvatarBlob && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      disabled={isSubmitting}
+                      onClick={clearSelectedAvatar}
+                    >
+                      <Trash2Icon
+                        data-icon="inline-start"
+                        aria-hidden="true"
+                      />
+                      <span>إزالة</span>
+                    </Button>
+                  )}
+                </div>
               </Field>
 
               {selectedMembers.length > 0 && (

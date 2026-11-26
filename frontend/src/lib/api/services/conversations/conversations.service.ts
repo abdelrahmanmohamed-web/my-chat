@@ -47,6 +47,32 @@ export async function updateConversation(
   return data;
 }
 
+export async function uploadGroupAvatar(
+  conversationId: string,
+  file: Blob,
+  mimeType?: string,
+): Promise<ConversationResponse> {
+  const { data } = await httpClient.put<ConversationResponse>(
+    CONVERSATION_ENDPOINTS.avatar(conversationId),
+    file,
+    {
+      headers: {
+        "Content-Type": mimeType || file.type || "application/octet-stream",
+      },
+    },
+  );
+  return data;
+}
+
+export async function removeGroupAvatar(
+  conversationId: string,
+): Promise<ConversationResponse> {
+  const { data } = await httpClient.delete<ConversationResponse>(
+    CONVERSATION_ENDPOINTS.avatar(conversationId),
+  );
+  return data;
+}
+
 export async function hideConversation(conversationId: string): Promise<void> {
   await httpClient.post(CONVERSATION_ENDPOINTS.hide(conversationId));
 }

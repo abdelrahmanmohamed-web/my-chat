@@ -1657,6 +1657,100 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     },
   },
 
+  "PUT /api/conversations/{conversationId}/avatar": {
+    operationId: "uploadGroupAvatar",
+    tags: ["Conversations"],
+    summary: "Upload or replace group avatar",
+    description:
+      "Accepts raw image binary data (`image/png`, `image/jpeg`, `image/webp`, `image/gif`, up to 2 MB), verifies image magic bytes, updates the group conversation's `avatarUrl` (admin only), and broadcasts `conversation:updated`.",
+    pathParameters: [
+      {
+        name: "conversationId",
+        in: "path",
+        required: true,
+        description: "Group conversation identifier (24-character hex ObjectId).",
+        schema: { type: "string", pattern: OBJECT_ID_PATTERN },
+      },
+    ],
+    requestBody: {
+      required: true,
+      description: "Raw group avatar image binary payload (max 2 MB).",
+      content: {
+        "image/png": { schema: { type: "string", format: "binary" } },
+        "image/jpeg": { schema: { type: "string", format: "binary" } },
+        "image/webp": { schema: { type: "string", format: "binary" } },
+        "image/gif": { schema: { type: "string", format: "binary" } },
+      },
+    },
+    responses: {
+      "200": {
+        description: "Updated group conversation.",
+        content: jsonBodyRef("ConversationResponse"),
+      },
+      "400": {
+        description:
+          "Missing, unsupported, or corrupted image payload, or direct conversation target.",
+        content: jsonInline(
+          { $ref: "#/components/schemas/ErrorResponse" },
+          { error: "Invalid avatar image" },
+        ),
+      },
+      "401": { $ref: "#/components/responses/Unauthorized" },
+      "403": {
+        description: "Caller is not an admin of the group conversation.",
+        content: jsonInline(
+          { $ref: "#/components/schemas/ErrorResponse" },
+          { error: "Admin role required" },
+        ),
+      },
+      "404": { $ref: "#/components/responses/ConversationNotFound" },
+      "413": { $ref: "#/components/responses/PayloadTooLarge" },
+      "429": { $ref: "#/components/responses/TooManyRequests" },
+      "500": { $ref: "#/components/responses/InternalServerError" },
+    },
+  },
+
+  "DELETE /api/conversations/{conversationId}/avatar": {
+    operationId: "removeGroupAvatar",
+    tags: ["Conversations"],
+    summary: "Remove group avatar",
+    description:
+      "Clears `avatarUrl` on a group conversation (admin only) and broadcasts `conversation:updated`.",
+    pathParameters: [
+      {
+        name: "conversationId",
+        in: "path",
+        required: true,
+        description: "Group conversation identifier (24-character hex ObjectId).",
+        schema: { type: "string", pattern: OBJECT_ID_PATTERN },
+      },
+    ],
+    responses: {
+      "200": {
+        description: "Updated group conversation with null avatarUrl.",
+        content: jsonBodyRef("ConversationResponse"),
+      },
+      "400": {
+        description: "Invalid conversation ID or direct conversation target.",
+        content: jsonInline(
+          { $ref: "#/components/schemas/ErrorResponse" },
+          { error: "Operation is only supported on group conversations" },
+        ),
+      },
+      "401": { $ref: "#/components/responses/Unauthorized" },
+      "403": {
+        description: "Caller is not an admin of the group conversation.",
+        content: jsonInline(
+          { $ref: "#/components/schemas/ErrorResponse" },
+          { error: "Admin role required" },
+        ),
+      },
+      "404": { $ref: "#/components/responses/ConversationNotFound" },
+      "429": { $ref: "#/components/responses/TooManyRequests" },
+      "500": { $ref: "#/components/responses/InternalServerError" },
+    },
+  },
+
   "POST /api/conversations/{conversationId}/participants": {
     operationId: "addGroupParticipants",
     tags: ["Conversations"],

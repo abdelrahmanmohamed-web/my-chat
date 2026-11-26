@@ -1,13 +1,21 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import {
   CheckIcon,
-  ImageIcon,
+  ImagePlusIcon,
   LogOutIcon,
   MessageSquareIcon,
   PencilIcon,
   SearchIcon,
   ShieldAlertIcon,
   ShieldCheckIcon,
+  Trash2Icon,
   UserMinusIcon,
   UserPlusIcon,
   XIcon,
@@ -37,6 +45,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { toApiError } from "@/lib/api";
 import {
+  ALLOWED_AVATAR_MIME_TYPES,
+  prepareAvatarUpload,
+} from "@/lib/avatar.utils";
+import {
   CONVERSATION_LIMITS,
   conversationUpdateSchema,
   type Conversation,
@@ -52,9 +64,11 @@ import {
   useAddGroupParticipantsMutation,
   useCreateDirectConversationMutation,
   useLeaveGroupConversationMutation,
+  useRemoveGroupAvatarMutation,
   useRemoveGroupParticipantMutation,
   useUpdateConversationMutation,
   useUpdateParticipantRoleMutation,
+  useUploadGroupAvatarMutation,
   useUserSearchQuery,
   useUsersBatchQuery,
 } from "../use-conversations";
@@ -91,9 +105,9 @@ function GroupDetailsContent({
   const [nameInput, setNameInput] = useState(conversation.name ?? "");
   const [nameError, setNameError] = useState<string | null>(null);
 
-  // Avatar URL editing (admin only)
-  const [isEditingAvatar, setIsEditingAvatar] = useState(false);
-  const [avatarInput, setAvatarInput] = useState(conversation.avatarUrl ?? "");
+  // Avatar upload / removal (admin only)
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const [isPreparingAvatar, setIsPreparingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
   // Add members (admin only)
@@ -126,6 +140,8 @@ function GroupDetailsContent({
   );
 
   const updateMutation = useUpdateConversationMutation();
+  const uploadAvatarMutation = useUploadGroupAvatarMutation();
+  const removeAvatarMutation = useRemoveGroupAvatarMutation();
   const addParticipantsMutation = useAddGroupParticipantsMutation();
   const removeParticipantMutation = useRemoveGroupParticipantMutation();
   const updateRoleMutation = useUpdateParticipantRoleMutation();
@@ -172,26 +188,43 @@ function GroupDetailsContent({
     }
   }
 
-  async function handleSaveAvatar(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmed = avatarInput.trim();
-    const parsed = conversationUpdateSchema.safeParse({
-      avatarUrl: trimmed.length > 0 ? trimmed : null,
-    });
-    if (!parsed.success) {
-      setAvatarError(parsed.error.issues[0]?.message ?? "رابط الصورة غير صالح");
+  async function handleAvatarFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
       return;
     }
 
     setAvatarError(null);
+    setIsPreparingAvatar(true);
+    let prepared: { blob: Blob; mimeType: string };
     try {
-      await updateMutation.mutateAsync({
+      prepared = await prepareAvatarUpload(file);
+    } catch (error) {
+      setIsPreparingAvatar(false);
+      setAvatarError(
+        error instanceof Error ? error.message : "تعذر تجهيز ملف الصورة.",
+      );
+      return;
+    }
+    setIsPreparingAvatar(false);
+
+    try {
+      await uploadAvatarMutation.mutateAsync({
         conversationId: conversation._id,
-        payload: parsed.data,
+        ...prepared,
       });
-      setIsEditingAvatar(false);
-    } catch {
-      // Handled centrally by mutation onError toast.
+    } catch (error) {
+      setAvatarError(toApiError(error).message);
+    }
+  }
+
+  async function handleRemoveAvatar() {
+    setAvatarError(null);
+    try {
+      await removeAvatarMutation.mutateAsync(conversation._id);
+    } catch (error) {
+      setAvatarError(toApiError(error).message);
     }
   }
 
@@ -268,69 +301,73 @@ function GroupDetailsContent({
           size="lg"
         />
 
-        {isAdmin && !isEditingAvatar && (
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            onClick={() => {
-              setAvatarInput(conversation.avatarUrl ?? "");
-              setAvatarError(null);
-              setIsEditingAvatar(true);
-            }}
-          >
-            <ImageIcon data-icon="inline-start" aria-hidden="true" />
-            <span>تغيير الصورة</span>
-          </Button>
-        )}
+        {isAdmin && (
+          <div className="flex flex-col items-center gap-2">
+            <input
+              ref={avatarFileInputRef}
+              type="file"
+              accept={ALLOWED_AVATAR_MIME_TYPES.join(",")}
+              aria-label="اختيار صورة المجموعة"
+              className="sr-only"
+              disabled={
+                isPreparingAvatar ||
+                uploadAvatarMutation.isPending ||
+                removeAvatarMutation.isPending
+              }
+              onChange={(event) => void handleAvatarFileChange(event)}
+            />
 
-        {isAdmin && isEditingAvatar && (
-          <form
-            onSubmit={handleSaveAvatar}
-            className="flex w-full flex-col gap-2 text-start"
-            noValidate
-          >
-            <Field data-invalid={Boolean(avatarError)}>
-              <FieldLabel htmlFor="group-avatar-url-input">
-                رابط صورة المجموعة
-              </FieldLabel>
-              <Input
-                id="group-avatar-url-input"
-                dir="ltr"
-                placeholder="https://example.com/group.png"
-                maxLength={CONVERSATION_LIMITS.avatarUrlMaxLength}
-                value={avatarInput}
-                onChange={(e) => setAvatarInput(e.target.value)}
-                disabled={updateMutation.isPending}
-                autoFocus
-              />
-              {avatarError && <FieldError>{avatarError}</FieldError>}
-            </Field>
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="xs"
-                disabled={updateMutation.isPending}
-                onClick={() => setIsEditingAvatar(false)}
+                disabled={
+                  isPreparingAvatar ||
+                  uploadAvatarMutation.isPending ||
+                  removeAvatarMutation.isPending
+                }
+                onClick={() => avatarFileInputRef.current?.click()}
               >
-                <XIcon data-icon="inline-start" aria-hidden="true" />
-                <span>إلغاء</span>
-              </Button>
-              <Button
-                type="submit"
-                size="xs"
-                disabled={updateMutation.isPending}
-              >
-                {updateMutation.isPending ? (
+                {isPreparingAvatar || uploadAvatarMutation.isPending ? (
                   <Spinner className="size-3.5" aria-hidden="true" />
                 ) : (
-                  <CheckIcon data-icon="inline-start" aria-hidden="true" />
+                  <ImagePlusIcon data-icon="inline-start" aria-hidden="true" />
                 )}
-                <span>حفظ</span>
+                <span>تغيير الصورة</span>
               </Button>
+
+              {conversation.avatarUrl && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="text-destructive hover:text-destructive"
+                  disabled={
+                    isPreparingAvatar ||
+                    uploadAvatarMutation.isPending ||
+                    removeAvatarMutation.isPending
+                  }
+                  onClick={() => void handleRemoveAvatar()}
+                >
+                  {removeAvatarMutation.isPending ? (
+                    <Spinner className="size-3.5" aria-hidden="true" />
+                  ) : (
+                    <Trash2Icon data-icon="inline-start" aria-hidden="true" />
+                  )}
+                  <span>إزالة الصورة</span>
+                </Button>
+              )}
             </div>
-          </form>
+
+            {avatarError && (
+              <Alert variant="destructive" className="text-start">
+                <AlertDescription className="text-xs">
+                  {avatarError}
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
         )}
 
         {!isEditingName ? (

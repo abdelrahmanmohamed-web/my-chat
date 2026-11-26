@@ -517,6 +517,40 @@ export async function updateConversation(
   return { kind: "ok" as const, conversation };
 }
 
+/**
+ * Updates or clears the avatar image on a group conversation (admin only).
+ */
+export async function updateGroupAvatar(
+  userId: string,
+  conversationId: string,
+  avatarUrl: string | null,
+) {
+  if (!Types.ObjectId.isValid(conversationId)) {
+    return { kind: "invalid" as const, error: "Invalid conversation ID" };
+  }
+
+  const conversation = await findConversationForUser(conversationId, userId);
+  if (!conversation) {
+    return { kind: "not_found" as const, error: "Conversation not found" };
+  }
+
+  if (conversation.type !== "group") {
+    return {
+      kind: "invalid" as const,
+      error: "Operation is only supported on group conversations",
+    };
+  }
+
+  if (!isAdmin(conversation, userId)) {
+    return { kind: "forbidden" as const, error: "Admin role required" };
+  }
+
+  conversation.avatarUrl = avatarUrl;
+  await conversation.save();
+
+  return { kind: "ok" as const, conversation };
+}
+
 // ============================================================================
 // Group Membership Management Operations
 // ============================================================================

@@ -8,6 +8,8 @@
  * - POST   /api/conversations                               : Creates a direct or group conversation.
  * - POST   /api/conversations/:id/hide                      : Hides a conversation for caller.
  * - PATCH  /api/conversations/:id                           : Updates metadata (name and avatar).
+ * - PUT    /api/conversations/:id/avatar                    : Uploads or replaces a group avatar (admin).
+ * - DELETE /api/conversations/:id/avatar                    : Removes a group avatar (admin).
  * - POST   /api/conversations/:id/participants              : Adds participants to a group (admin).
  * - DELETE /api/conversations/:id/participants/:userId      : Removes a participant from a group (admin).
  * - POST   /api/conversations/:id/leave                     : Leaves a group conversation.
@@ -21,6 +23,10 @@ import {
   type AppSocketServer,
   getSocketServer,
 } from "../../infrastructure/socket.ts";
+import {
+  avatarUploadParser,
+  extractAvatarDataUrl,
+} from "../../shared/middleware/avatar.upload.ts";
 import { messageRouter } from "../messages/index.ts";
 import { getParticipantIds } from "./conversation.access.ts";
 import {
@@ -43,6 +49,7 @@ import {
   removeGroupParticipant,
   searchUsers,
   updateConversation,
+  updateGroupAvatar,
   updateGroupParticipantRole,
 } from "./conversation.service.ts";
 
@@ -239,6 +246,65 @@ conversationRouter.patch("/:conversationId", async (req, res) => {
   });
 
   return res.json({ conversation: result.conversation });
+});
+
+/**
+ * Shared handler for updating or clearing a group conversation's avatar image.
+ */
+async function handleGroupAvatarUpdate(
+  userId: string,
+  conversationId: string,
+  avatarUrl: string | null,
+  res: Response,
+) {
+  const result = await updateGroupAvatar(userId, conversationId, avatarUrl);
+  if (result.kind !== "ok") {
+    return sendServiceError(res, result);
+  }
+
+  await emitWithSocket((io) => {
+    for (const pId of getParticipantIds(result.conversation)) {
+      io.to(`user:${pId}`).emit("conversation:updated", {
+        conversationId,
+        conversation: result.conversation,
+      });
+    }
+  });
+
+  return res.json({ conversation: result.conversation });
+}
+
+/**
+ * Uploads or replaces a group conversation's avatar image (admin only).
+ */
+conversationRouter.put(
+  "/:conversationId/avatar",
+  avatarUploadParser,
+  async (req, res) => {
+    const dataUrl = extractAvatarDataUrl(req.body);
+    if (!dataUrl) {
+      return res.status(400).json({ error: "Invalid avatar image" });
+    }
+
+    return handleGroupAvatarUpdate(
+      req.user!.id,
+      req.params.conversationId,
+      dataUrl,
+      res,
+    );
+  },
+);
+
+/**
+ * Removes a group conversation's avatar image (admin only).
+ */
+conversationRouter.delete("/:conversationId/avatar", async (req, res) => {
+  return handleGroupAvatarUpdate(
+    req.user!.id,
+    req.params.conversationId,
+    null,
+    res,
+  );
 });
 
 // ============================================================================

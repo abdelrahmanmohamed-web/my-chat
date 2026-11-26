@@ -330,6 +330,32 @@ describe("conversations UI flows", () => {
           return HttpResponse.json({ conversation: updated });
         },
       ),
+      http.put(
+        "*/api/conversations/:conversationId/avatar",
+        ({ params }) => {
+          conversations = conversations.map((c) =>
+            c._id === params.conversationId
+              ? { ...c, avatarUrl: "data:image/png;base64,iVBORw0KGgo=" }
+              : c,
+          );
+          const updated = conversations.find(
+            (c) => c._id === params.conversationId,
+          );
+          return HttpResponse.json({ conversation: updated });
+        },
+      ),
+      http.delete(
+        "*/api/conversations/:conversationId/avatar",
+        ({ params }) => {
+          conversations = conversations.map((c) =>
+            c._id === params.conversationId ? { ...c, avatarUrl: null } : c,
+          );
+          const updated = conversations.find(
+            (c) => c._id === params.conversationId,
+          );
+          return HttpResponse.json({ conversation: updated });
+        },
+      ),
       http.patch(
         "*/api/conversations/:conversationId/participants/:userId/role",
         async ({ params, request }) => {
@@ -395,13 +421,26 @@ describe("conversations UI flows", () => {
     expect(within(dialog).getByText("إضافة أعضاء")).toBeInTheDocument();
     expect(await within(dialog).findByText("سارة علي")).toBeInTheDocument();
 
-    // Update avatarUrl as admin
-    fireEvent.click(within(dialog).getByText("تغيير الصورة"));
-    fireEvent.change(
-      within(dialog).getByLabelText("رابط صورة المجموعة"),
-      { target: { value: "https://example.com/new-avatar.png" } },
+    // Upload & remove group avatar file as admin
+    const avatarInput = within(dialog).getByLabelText(
+      "اختيار صورة المجموعة",
+    ) as HTMLInputElement;
+    const validPngFile = new File(
+      [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+      "group.png",
+      { type: "image/png" },
     );
-    fireEvent.click(within(dialog).getByRole("button", { name: "حفظ" }));
+    fireEvent.change(avatarInput, { target: { files: [validPngFile] } });
+
+    const removeAvatarBtn = await within(dialog).findByRole("button", {
+      name: "إزالة الصورة",
+    });
+    fireEvent.click(removeAvatarBtn);
+    await waitFor(() => {
+      expect(
+        within(dialog).queryByRole("button", { name: "إزالة الصورة" }),
+      ).not.toBeInTheDocument();
+    });
 
     // Click member row as admin -> sees DM, Promote, Kick
     const saraRow = await within(dialog).findByRole("button", {

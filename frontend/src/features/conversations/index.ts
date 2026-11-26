@@ -25,9 +25,11 @@ export {
   useCreateDirectConversationMutation,
   useHideConversationMutation,
   useLeaveGroupConversationMutation,
+  useRemoveGroupAvatarMutation,
   useRemoveGroupParticipantMutation,
   useUpdateConversationMutation,
   useUpdateParticipantRoleMutation,
+  useUploadGroupAvatarMutation,
   useUserSearchQuery,
   useUsersBatchQuery,
 } from "./use-conversations";

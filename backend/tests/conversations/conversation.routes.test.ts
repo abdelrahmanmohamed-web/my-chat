@@ -840,5 +840,116 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
       };
       expect(listBody.conversations[0].avatarUrl).toBe(avatarUrl);
     });
+
+    it("allows group admin to upload and remove group avatar and blocks non-admins and direct chats", async () => {
+      const validPng = Buffer.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+        0x49, 0x48, 0x44, 0x52,
+      ]);
+
+      const groupRes = await fetch(`${baseUrl}/api/conversations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userA.token}`,
+        },
+        body: JSON.stringify({
+          type: "group",
+          name: "Avatar Group",
+          participantIds: [userB.id],
+        }),
+      });
+      const groupId = (
+        (await groupRes.json()) as { conversation: { _id: string } }
+      ).conversation._id;
+
+      // Non-admin member cannot upload -> 403
+      const forbiddenRes = await fetch(
+        `${baseUrl}/api/conversations/${groupId}/avatar`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${userB.token}`,
+            "Content-Type": "image/png",
+          },
+          body: validPng,
+        },
+      );
+      expect(forbiddenRes.status).toBe(403);
+
+      // Invalid bytes -> 400
+      const invalidRes = await fetch(
+        `${baseUrl}/api/conversations/${groupId}/avatar`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${userA.token}`,
+            "Content-Type": "image/png",
+          },
+          body: Buffer.from("invalid-image"),
+        },
+      );
+      expect(invalidRes.status).toBe(400);
+
+      // Admin uploads valid PNG -> 200
+      const uploadRes = await fetch(
+        `${baseUrl}/api/conversations/${groupId}/avatar`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${userA.token}`,
+            "Content-Type": "image/png",
+          },
+          body: validPng,
+        },
+      );
+      expect(uploadRes.status).toBe(200);
+      const uploadBody = (await uploadRes.json()) as {
+        conversation: { avatarUrl: string | null };
+      };
+      expect(uploadBody.conversation.avatarUrl).toBe(
+        `data:image/png;base64,${validPng.toString("base64")}`,
+      );
+
+      // Admin removes group avatar -> 200
+      const deleteRes = await fetch(
+        `${baseUrl}/api/conversations/${groupId}/avatar`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${userA.token}` },
+        },
+      );
+      expect(deleteRes.status).toBe(200);
+      const deleteBody = (await deleteRes.json()) as {
+        conversation: { avatarUrl: string | null };
+      };
+      expect(deleteBody.conversation.avatarUrl).toBeNull();
+
+      // Direct conversation rejects group avatar upload -> 400
+      const directRes = await fetch(`${baseUrl}/api/conversations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userA.token}`,
+        },
+        body: JSON.stringify({ type: "direct", participantId: userB.id }),
+      });
+      const directId = (
+        (await directRes.json()) as { conversation: { _id: string } }
+      ).conversation._id;
+
+      const directAvatarRes = await fetch(
+        `${baseUrl}/api/conversations/${directId}/avatar`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${userA.token}`,
+            "Content-Type": "image/png",
+          },
+          body: validPng,
+        },
+      );
+      expect(directAvatarRes.status).toBe(400);
+    });
   });
 });

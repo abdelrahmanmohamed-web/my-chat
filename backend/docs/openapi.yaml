@@ -1228,6 +1228,133 @@ paths:
           "$ref": "#/components/responses/TooManyRequests"
         "500":
           "$ref": "#/components/responses/InternalServerError"
+  "/api/conversations/{conversationId}/avatar":
+    put:
+      tags:
+        - Conversations
+      operationId: uploadGroupAvatar
+      summary: Upload or replace group avatar
+      description: "Accepts raw image binary data (`image/png`, `image/jpeg`, `image/webp`, `image/gif`, up to 2 MB), verifies image magic bytes, updates the group conversation's `avatarUrl` (admin only), and broadcasts `conversation:updated`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: "Group conversation identifier (24-character hex ObjectId)."
+          schema:
+            type: string
+            pattern: "^[0-9a-fA-F]{24}$"
+      requestBody:
+        required: true
+        description: "Raw group avatar image binary payload (max 2 MB)."
+        content:
+          "image/png":
+            schema:
+              type: string
+              format: binary
+          "image/jpeg":
+            schema:
+              type: string
+              format: binary
+          "image/webp":
+            schema:
+              type: string
+              format: binary
+          "image/gif":
+            schema:
+              type: string
+              format: binary
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Updated group conversation.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ConversationResponse"
+        "400":
+          description: "Missing, unsupported, or corrupted image payload, or direct conversation target."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Invalid avatar image
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          description: Caller is not an admin of the group conversation.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Admin role required
+        "404":
+          "$ref": "#/components/responses/ConversationNotFound"
+        "413":
+          "$ref": "#/components/responses/PayloadTooLarge"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+    delete:
+      tags:
+        - Conversations
+      operationId: removeGroupAvatar
+      summary: Remove group avatar
+      description: "Clears `avatarUrl` on a group conversation (admin only) and broadcasts `conversation:updated`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: "Group conversation identifier (24-character hex ObjectId)."
+          schema:
+            type: string
+            pattern: "^[0-9a-fA-F]{24}$"
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Updated group conversation with null avatarUrl.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ConversationResponse"
+        "400":
+          description: Invalid conversation ID or direct conversation target.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Operation is only supported on group conversations
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          description: Caller is not an admin of the group conversation.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Admin role required
+        "404":
+          "$ref": "#/components/responses/ConversationNotFound"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
   "/api/conversations/{conversationId}/participants":
     post:
       tags:

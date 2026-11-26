@@ -9,11 +9,13 @@ import {
   hideConversation,
   leaveGroupConversation,
   listConversations,
+  removeGroupAvatar,
   removeGroupParticipant,
   searchUsers,
   toApiError,
   updateConversation,
   updateGroupParticipantRole,
+  uploadGroupAvatar,
 } from "@/lib/api";
 import { CONVERSATIONS_REST_POLL_INTERVAL_MS } from "@/lib/socket";
 import { useAuthStore, useConnectionStore } from "@/stores";
@@ -272,6 +274,50 @@ export function useLeaveGroupConversationMutation() {
         exact: true,
       });
       toast.success("لقد غادرت المجموعة.");
+    },
+    onError: (error) => {
+      toast.error(toApiError(error).message);
+    },
+  });
+}
+
+export function useUploadGroupAvatarMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      conversationId,
+      blob,
+      mimeType,
+    }: {
+      conversationId: string;
+      blob: Blob;
+      mimeType: string;
+    }) => uploadGroupAvatar(conversationId, blob, mimeType),
+    onSuccess: ({ conversation }) => {
+      queryClient.setQueryData<Conversation[]>(
+        QUERY_KEYS.conversations,
+        (current) => upsertConversationInCache(current, conversation),
+      );
+      toast.success("تم تحديث صورة المجموعة.");
+    },
+    onError: (error) => {
+      toast.error(toApiError(error).message);
+    },
+  });
+}
+
+export function useRemoveGroupAvatarMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (conversationId: string) => removeGroupAvatar(conversationId),
+    onSuccess: ({ conversation }) => {
+      queryClient.setQueryData<Conversation[]>(
+        QUERY_KEYS.conversations,
+        (current) => upsertConversationInCache(current, conversation),
+      );
+      toast.success("تمت إزالة صورة المجموعة.");
     },
     onError: (error) => {
       toast.error(toApiError(error).message);

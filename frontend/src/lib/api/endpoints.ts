@@ -26,6 +26,8 @@ export const CONVERSATION_ENDPOINTS = {
   create: "/api/conversations",
   byId: (conversationId: string): string =>
     `/api/conversations/${encodeURIComponent(conversationId)}`,
+  avatar: (conversationId: string): string =>
+    `/api/conversations/${encodeURIComponent(conversationId)}/avatar`,
   hide: (conversationId: string): string =>
     `/api/conversations/${encodeURIComponent(conversationId)}/hide`,
   participants: (conversationId: string): string =>
