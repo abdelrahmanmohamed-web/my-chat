@@ -8,6 +8,7 @@ const OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
 export const CONVERSATION_LIMITS = {
   nameMaxLength: 120,
   avatarUrlMaxLength: 2048,
+  groupMaxParticipants: 100,
   searchQueryMinLength: 1,
   searchQueryMaxLength: 100,
   searchLimitMin: 1,
@@ -34,11 +35,63 @@ export const userSearchQuerySchema = z.object({
 });
 
 export const directConversationSchema = z.object({
+  type: z.literal("direct").optional(),
   participantId: z
     .string()
     .trim()
     .min(1, "يرجى اختيار مستخدم")
     .regex(OBJECT_ID_PATTERN, "معرّف المستخدم غير صالح"),
+});
+
+export const groupConversationSchema = z.object({
+  type: z.literal("group"),
+  name: z
+    .string()
+    .trim()
+    .min(1, "يرجى إدخال اسم المجموعة")
+    .max(
+      CONVERSATION_LIMITS.nameMaxLength,
+      `اسم المجموعة يجب ألا يتجاوز ${CONVERSATION_LIMITS.nameMaxLength} حرفاً`,
+    ),
+  participantIds: z
+    .array(
+      z
+        .string()
+        .trim()
+        .regex(OBJECT_ID_PATTERN, "معرّف المستخدم غير صالح"),
+    )
+    .min(1, "يرجى اختيار مشارك واحد على الأقل")
+    .max(CONVERSATION_LIMITS.groupMaxParticipants - 1),
+  avatarUrl: z
+    .string()
+    .trim()
+    .max(
+      CONVERSATION_LIMITS.avatarUrlMaxLength,
+      `رابط الصورة يجب ألا يتجاوز ${CONVERSATION_LIMITS.avatarUrlMaxLength} حرفاً`,
+    )
+    .nullable()
+    .optional(),
+});
+
+export const createConversationSchema = z.union([
+  groupConversationSchema,
+  directConversationSchema,
+]);
+
+export const addGroupParticipantsSchema = z.object({
+  userIds: z
+    .array(
+      z
+        .string()
+        .trim()
+        .regex(OBJECT_ID_PATTERN, "معرّف المستخدم غير صالح"),
+    )
+    .min(1, "يرجى اختيار مشارك واحد على الأقل")
+    .max(CONVERSATION_LIMITS.groupMaxParticipants - 1),
+});
+
+export const updateParticipantRoleSchema = z.object({
+  role: z.enum(["admin", "member"]),
 });
 
 export const conversationUpdateSchema = z
@@ -72,6 +125,18 @@ export const conversationUpdateSchema = z
 export type UserSearchQueryInput = z.infer<typeof userSearchQuerySchema>;
 export type DirectConversationFormInput = z.infer<
   typeof directConversationSchema
+>;
+export type GroupConversationFormInput = z.infer<
+  typeof groupConversationSchema
+>;
+export type CreateConversationFormInput = z.infer<
+  typeof createConversationSchema
+>;
+export type AddGroupParticipantsFormInput = z.infer<
+  typeof addGroupParticipantsSchema
+>;
+export type UpdateParticipantRoleFormInput = z.infer<
+  typeof updateParticipantRoleSchema
 >;
 export type ConversationUpdateFormInput = z.infer<
   typeof conversationUpdateSchema

@@ -2,7 +2,6 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { delay, http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import {
-  applyReadUpdateToCache,
   createOptimisticMessage,
   findHighestReadMessageIndex,
   flattenMessagesPages,
@@ -16,7 +15,6 @@ import {
   TEST_CONVERSATION_ID,
   TEST_CONVERSATIONS,
   TEST_MESSAGES_NEWEST_FIRST,
-  TEST_OTHER_USER_ID,
   TEST_USER,
 } from "@/test/msw/fixtures";
 import { mswServer } from "@/test/msw/server";
@@ -103,19 +101,17 @@ describe("chat schemas, utils & message cache helpers", () => {
       "cid-1",
     );
     const deduped = upsertMessageInCache(reconciled, serverConfirmed);
-    const withRead = applyReadUpdateToCache(deduped, {
-      userId: TEST_OTHER_USER_ID,
-      lastReadMessageId: serverConfirmed._id,
-    });
 
-    const flattened = flattenMessagesPages(withRead);
+    const flattened = flattenMessagesPages(deduped);
     expect(flattened.map((item) => item._id)).toEqual([
       TEST_MESSAGES_NEWEST_FIRST[1]._id,
       TEST_MESSAGES_NEWEST_FIRST[0]._id,
       "65f1a9c2e4b0a1b2c3d4e777",
     ]);
 
-    expect(findHighestReadMessageIndex(flattened, TEST_USER.id)).toBe(2);
+    expect(
+      findHighestReadMessageIndex(flattened, [serverConfirmed._id]),
+    ).toBe(2);
   });
 });
 
@@ -167,9 +163,9 @@ describe("chat REST baseline UI flows", () => {
                 _id: "65f1a9c2e4b0a1b2c3d4e799",
                 conversationId: String(params.conversationId),
                 senderId: TEST_USER.id,
+                type: "user",
                 content: body.content,
                 clientId: body.clientId ?? null,
-                reads: [],
                 expiresAt: null,
                 createdAt: now,
                 updatedAt: now,

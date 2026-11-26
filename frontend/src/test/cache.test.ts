@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  applyReadUpdateToCache,
   createOptimisticMessage,
   findHighestReadMessageIndex,
   flattenMessagesPages,
@@ -13,8 +12,11 @@ import {
 } from "@/features/chat/messages.cache";
 import {
   removeConversationFromCache,
+  removeParticipantFromConversationInCache,
   sortConversationsByActivity,
   updateConversationLastMessageInCache,
+  updateConversationParticipantReadInCache,
+  updateParticipantRoleInCache,
   upsertConversationInCache,
 } from "@/features/conversations/conversations.cache";
 import type { Conversation } from "@/types/conversations";
@@ -29,9 +31,9 @@ describe("Phase 6 Quality — Chat Messages Cache", () => {
     _id: "msg-1",
     conversationId,
     senderId: otherUserId,
+    type: "user",
     content: "مرحبا",
     clientId: null,
-    reads: [],
     expiresAt: null,
     createdAt: "2026-11-13T10:00:00.000Z",
     updatedAt: "2026-11-13T10:00:00.000Z",
@@ -42,9 +44,9 @@ describe("Phase 6 Quality — Chat Messages Cache", () => {
     _id: "msg-2",
     conversationId,
     senderId: myUserId,
+    type: "user",
     content: "أهلاً بك",
     clientId: "client-initial-2",
-    reads: [],
     expiresAt: null,
     createdAt: "2026-11-13T10:01:00.000Z",
     updatedAt: "2026-11-13T10:01:00.000Z",
@@ -66,10 +68,10 @@ describe("Phase 6 Quality — Chat Messages Cache", () => {
 
     expect(optimistic.conversationId).toBe(conversationId);
     expect(optimistic.senderId).toBe(myUserId);
+    expect(optimistic.type).toBe("user");
     expect(optimistic.content).toBe("رسالة جديدة");
     expect(optimistic.clientId).toBe("client-opt-1");
     expect(optimistic.localStatus).toBe("sending");
-    expect(optimistic.reads).toEqual([]);
     expect(optimistic._id).toBe("client-opt-1");
   });
 
@@ -112,11 +114,9 @@ describe("Phase 6 Quality — Chat Messages Cache", () => {
     expect(failedItem?.localStatus).toBe("failed");
     expect(failedItem?.errorMessage).toBe("انقطع الاتصال بالخادم");
 
-    // Existing sent messages remain unaffected
     const sentItem = failed?.pages[0].messages.find((m) => m._id === "msg-2");
     expect(sentItem?.localStatus).toBe("sent");
 
-    // Resets back to sending when outbox flushes
     const sendingAgain = markOptimisticMessageSending(failed, "client-opt-3");
     const sendingItem = sendingAgain?.pages[0].messages.find(
       (m) => m.clientId === "client-opt-3",
@@ -139,9 +139,9 @@ describe("Phase 6 Quality — Chat Messages Cache", () => {
       _id: "server-id-4",
       conversationId,
       senderId: myUserId,
+      type: "user",
       content: "رسالة في الانتظار",
       clientId: "client-opt-4",
-      reads: [],
       expiresAt: null,
       createdAt: "2026-11-13T10:02:00.000Z",
       updatedAt: "2026-11-13T10:02:00.000Z",
@@ -163,12 +163,12 @@ describe("Phase 6 Quality — Chat Messages Cache", () => {
 
   it("upsertMessageInCache dedupes double delivery by message._id", () => {
     const incoming: Message = {
-      _id: "msg-1", // Already exists in initialData
+      _id: "msg-1",
       conversationId,
       senderId: otherUserId,
+      type: "user",
       content: "مرحبا معدلة",
       clientId: null,
-      reads: [],
       expiresAt: null,
       createdAt: "2026-11-13T10:00:00.000Z",
       updatedAt: "2026-11-13T10:05:00.000Z",
@@ -180,7 +180,6 @@ describe("Phase 6 Quality — Chat Messages Cache", () => {
       firstUpsert.pages[0].messages.filter((m) => m._id === "msg-1"),
     ).toHaveLength(1);
 
-    // Replay duplicate event
     const secondUpsert = upsertMessageInCache(firstUpsert, incoming);
     expect(secondUpsert.pages[0].messages).toHaveLength(2);
     expect(
@@ -188,37 +187,15 @@ describe("Phase 6 Quality — Chat Messages Cache", () => {
     ).toHaveLength(1);
   });
 
-  it("applyReadUpdateToCache updates message reads array without duplicating user", () => {
-    const withRead = applyReadUpdateToCache(initialData, {
-      userId: otherUserId,
-      lastReadMessageId: "msg-2",
-    });
-
-    const target = withRead?.pages[0].messages.find((m) => m._id === "msg-2");
-    expect(target?.reads).toEqual([
-      { userId: otherUserId, lastReadMessageId: "msg-2" },
-    ]);
-
-    // Subsequent read update for same user replaces without duplicate
-    const updatedAgain = applyReadUpdateToCache(withRead, {
-      userId: otherUserId,
-      lastReadMessageId: "msg-2",
-    });
-    const target2 = updatedAgain?.pages[0].messages.find(
-      (m) => m._id === "msg-2",
-    );
-    expect(target2?.reads).toHaveLength(1);
-  });
-
   it("flattenMessagesPages sorts oldest-first and dedupes across multiple pages", () => {
     const multiPageData: ChatMessagesInfiniteData = {
       pages: [
         {
-          messages: [msg2], // Newest page
+          messages: [msg2],
           nextCursor: "cursor-1",
         },
         {
-          messages: [msg2, msg1], // Older page with overlap
+          messages: [msg2, msg1],
           nextCursor: null,
         },
       ],
@@ -227,8 +204,8 @@ describe("Phase 6 Quality — Chat Messages Cache", () => {
 
     const flattened = flattenMessagesPages(multiPageData);
     expect(flattened).toHaveLength(2);
-    expect(flattened[0]._id).toBe("msg-1"); // Oldest first
-    expect(flattened[1]._id).toBe("msg-2"); // Newest last
+    expect(flattened[0]._id).toBe("msg-1");
+    expect(flattened[1]._id).toBe("msg-2");
   });
 
   it("findHighestReadMessageIndex determines read status strictly by list position", () => {
@@ -237,16 +214,12 @@ describe("Phase 6 Quality — Chat Messages Cache", () => {
       {
         ...msg2,
         _id: "650000000000000000000001", // Lexically smaller ObjectId, but chronologically AFTER
-        reads: [
-          {
-            userId: otherUserId,
-            lastReadMessageId: "650000000000000000000001",
-          },
-        ],
       },
     ];
 
-    const highestIndex = findHighestReadMessageIndex(chronological, myUserId);
+    const highestIndex = findHighestReadMessageIndex(chronological, [
+      "650000000000000000000001",
+    ]);
     expect(highestIndex).toBe(1);
   });
 });
@@ -255,7 +228,10 @@ describe("Phase 6 Quality — Conversations Cache", () => {
   const conv1: Conversation = {
     _id: "c-1",
     type: "direct",
-    participantIds: ["u-1", "u-2"],
+    participants: [
+      { userId: "u-1", role: "member", joinedAt: "2026-11-13T07:00:00.000Z" },
+      { userId: "u-2", role: "member", joinedAt: "2026-11-13T07:00:00.000Z" },
+    ],
     hiddenFor: [],
     name: "محادثة 1",
     avatarUrl: null,
@@ -266,10 +242,13 @@ describe("Phase 6 Quality — Conversations Cache", () => {
 
   const conv2: Conversation = {
     _id: "c-2",
-    type: "direct",
-    participantIds: ["u-1", "u-3"],
+    type: "group",
+    participants: [
+      { userId: "u-1", role: "admin", joinedAt: "2026-11-13T07:00:00.000Z" },
+      { userId: "u-3", role: "member", joinedAt: "2026-11-13T07:00:00.000Z" },
+    ],
     hiddenFor: [],
-    name: "محادثة 2",
+    name: "مجموعة 2",
     avatarUrl: null,
     lastMessageAt: "2026-11-13T09:00:00.000Z",
     createdAt: "2026-11-13T07:00:00.000Z",
@@ -303,9 +282,9 @@ describe("Phase 6 Quality — Conversations Cache", () => {
       _id: "m-new",
       conversationId: "c-1",
       senderId: "u-2",
+      type: "user",
       content: "رسالة جديدة ترفع المحادثة",
       clientId: null,
-      reads: [],
       expiresAt: null,
       createdAt: "2026-11-13T11:00:00.000Z",
       updatedAt: "2026-11-13T11:00:00.000Z",
@@ -319,7 +298,6 @@ describe("Phase 6 Quality — Conversations Cache", () => {
     expect(updated![0].lastMessage?.content).toBe("رسالة جديدة ترفع المحادثة");
     expect(updated![0].unreadCount).toBe(1);
 
-    // Ignores out-of-order older messages
     const olderMsg: Message = {
       ...newMsg,
       _id: "m-old",
@@ -327,6 +305,35 @@ describe("Phase 6 Quality — Conversations Cache", () => {
     };
     const untouched = updateConversationLastMessageInCache(updated, olderMsg);
     expect(untouched![0].lastMessage?.messageId).toBe("m-new");
+  });
+
+  it("updates participant read pointer, role, and removals in cache", () => {
+    const withRead = updateConversationParticipantReadInCache([conv1], {
+      conversationId: "c-1",
+      userId: "u-2",
+      lastReadMessageId: "msg-99",
+    });
+    expect(
+      withRead?.[0].participants.find((p) => p.userId === "u-2")
+        ?.lastReadMessageId,
+    ).toBe("msg-99");
+
+    const promoted = updateParticipantRoleInCache([conv2], {
+      conversationId: "c-2",
+      userId: "u-3",
+      role: "admin",
+    });
+    expect(
+      promoted?.[0].participants.find((p) => p.userId === "u-3")?.role,
+    ).toBe("admin");
+
+    const afterRemoval = removeParticipantFromConversationInCache([conv2], {
+      conversationId: "c-2",
+      userId: "u-1",
+      promotedAdminId: "u-3",
+    });
+    expect(afterRemoval?.[0].participants).toHaveLength(1);
+    expect(afterRemoval?.[0].participants[0].role).toBe("admin");
   });
 
   it("removeConversationFromCache filters out hidden conversation", () => {

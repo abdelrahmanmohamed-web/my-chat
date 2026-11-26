@@ -8,6 +8,7 @@ import {
 import { http, HttpResponse } from "msw";
 import { describe, expect, it, vi } from "vitest";
 import { useConnectionStore, usePresenceStore } from "@/stores";
+import { formatMessageDateSeparator } from "@/lib/date";
 import type { Message } from "@/types/messages";
 import { createFakeRealtimeSocket } from "./fake-socket";
 import {
@@ -209,9 +210,9 @@ describe("Phase 5 polish, typing, presence, unread & theme", () => {
       _id: "msg-debounced-read-1",
       conversationId: TEST_CONVERSATION_ID,
       senderId: TEST_OTHER_USER_ID,
+      type: "user",
       content: "رسالة مؤجلة القراءة",
       clientId: null,
-      reads: [],
       expiresAt: null,
       createdAt: "2026-11-13T10:00:00.000Z",
       updatedAt: "2026-11-13T10:00:00.000Z",
@@ -233,7 +234,23 @@ describe("Phase 5 polish, typing, presence, unread & theme", () => {
 
   it("updates unread badge, document.title unread count, and clears when conversation is opened", async () => {
     const fakeSocket = createFakeRealtimeSocket();
-    registerBaseChatHandlers();
+    let conversationsFetchCount = 0;
+    mswServer.use(
+      http.get("*/api/conversations", () => {
+        conversationsFetchCount += 1;
+        return HttpResponse.json({ conversations: TEST_CONVERSATIONS });
+      }),
+      http.get("*/api/conversations/:conversationId/messages", () =>
+        HttpResponse.json({
+          messages: TEST_MESSAGES_NEWEST_FIRST,
+          nextCursor: null,
+        }),
+      ),
+      http.patch(
+        "*/api/conversations/:conversationId/messages/:messageId/read",
+        () => HttpResponse.json({ status: "ok" }),
+      ),
+    );
 
     renderAppAt(`/conversations/${TEST_CONVERSATION_ID}`, {
       socketInstance: fakeSocket,
@@ -244,14 +261,18 @@ describe("Phase 5 polish, typing, presence, unread & theme", () => {
       fakeSocket.simulateConnect("websocket");
     });
 
+    await waitFor(() => {
+      expect(conversationsFetchCount).toBeGreaterThanOrEqual(2);
+    });
+
     // Incoming message for another conversation
     const backgroundMessage: Message = {
       _id: "msg-unread-bg-1",
       conversationId: TEST_SECOND_CONVERSATION_ID,
       senderId: "65f1a9c2e4b0a1b2c3d4e503",
+      type: "user",
       content: "رسالة جديدة في الخلفية",
       clientId: null,
-      reads: [],
       expiresAt: null,
       createdAt: "2026-11-13T10:05:00.000Z",
       updatedAt: "2026-11-13T10:05:00.000Z",
@@ -279,8 +300,11 @@ describe("Phase 5 polish, typing, presence, unread & theme", () => {
       socketInstance: fakeSocket,
     });
 
-    // Day separator pill exists (formatted with Arabic date locale: "أمس")
-    expect(await screen.findByText("أمس")).toBeInTheDocument();
+    // Day separator pill exists matching localized date separator
+    const expectedLabel = formatMessageDateSeparator(
+      TEST_MESSAGES_NEWEST_FIRST[0].createdAt,
+    );
+    expect(await screen.findByText(expectedLabel)).toBeInTheDocument();
   });
 
   it("hides typing and presence in Level 3 REST fallback mode", async () => {

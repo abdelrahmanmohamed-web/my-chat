@@ -1,4 +1,9 @@
-import { EyeOffIcon, MoreVerticalIcon, PencilIcon } from "lucide-react";
+import {
+  EyeOffIcon,
+  MoreVerticalIcon,
+  PencilIcon,
+  UsersIcon,
+} from "lucide-react";
 import { Link } from "react-router";
 import { cn } from "cn";
 import { conversationPath } from "@/app/routes";
@@ -16,6 +21,10 @@ import {
   useTypingUserIds,
 } from "@/stores";
 import type { Conversation } from "@/types/conversations";
+import {
+  getOtherDirectParticipantId,
+  isConversationAdmin,
+} from "../conversations.cache";
 import { ConversationAvatar } from "./ConversationAvatar";
 
 interface ConversationListItemProps {
@@ -33,11 +42,14 @@ export function ConversationListItem({
   onEdit,
   onHide,
 }: ConversationListItemProps) {
+  const isGroup = conversation.type === "group";
+  const canEdit =
+    !isGroup || isConversationAdmin(conversation, currentUserId);
   const title = conversation.name?.trim() || "محادثة";
   const activityIso =
     conversation.lastMessageAt ??
-    conversation.updatedAt ??
-    conversation.createdAt;
+    conversation.createdAt ??
+    conversation.updatedAt;
   const formattedTime = formatConversationListTime(activityIso);
 
   const lastMessage = conversation.lastMessage;
@@ -45,9 +57,7 @@ export function ConversationListItem({
     ? `${lastMessage.senderId === currentUserId ? "أنت: " : ""}${lastMessage.content}`
     : "ابدأ المحادثة الآن";
 
-  const otherUserId = conversation.participantIds?.find(
-    (id) => id !== currentUserId,
-  );
+  const otherUserId = getOtherDirectParticipantId(conversation, currentUserId);
   const isRestFallbackActive = useConnectionStore(
     (state) => state.isRestFallbackActive,
   );
@@ -89,8 +99,14 @@ export function ConversationListItem({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2">
-            <p className="truncate text-sm font-medium text-sidebar-foreground">
-              {title}
+            <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-sidebar-foreground">
+              {isGroup && (
+                <UsersIcon
+                  className="size-3.5 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              )}
+              <span className="truncate">{title}</span>
             </p>
             {formattedTime && (
               <span className="shrink-0 text-[11px] text-muted-foreground">
@@ -132,10 +148,12 @@ export function ConversationListItem({
             <MoreVerticalIcon aria-hidden="true" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem onClick={() => onEdit(conversation)}>
-              <PencilIcon aria-hidden="true" />
-              <span>تعديل الاسم</span>
-            </DropdownMenuItem>
+            {canEdit && (
+              <DropdownMenuItem onClick={() => onEdit(conversation)}>
+                <PencilIcon aria-hidden="true" />
+                <span>تعديل الاسم</span>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem
               variant="destructive"
               onClick={() => onHide(conversation._id)}

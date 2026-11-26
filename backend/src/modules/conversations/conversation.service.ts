@@ -165,6 +165,47 @@ export interface ConversationUserSearchResult {
   status: "online" | "offline";
 }
 
+export interface PublicUserProfile {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  status: "online" | "offline";
+}
+
+/**
+ * Fetches sanitized public profiles for a list of user IDs (e.g. group participants).
+ */
+export async function getUsersByIds(
+  userIds: string[],
+): Promise<
+  { kind: "invalid" } | { kind: "ok"; users: PublicUserProfile[] }
+> {
+  const uniqueIds = Array.from(new Set(userIds));
+  for (const id of uniqueIds) {
+    if (!Types.ObjectId.isValid(id)) {
+      return { kind: "invalid" };
+    }
+  }
+
+  const users = await User.find({
+    _id: { $in: uniqueIds.map((id) => new Types.ObjectId(id)) },
+  })
+    .select("_id username displayName avatarUrl status")
+    .lean();
+
+  return {
+    kind: "ok",
+    users: users.map((user) => ({
+      id: user._id.toString(),
+      username: user.username,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl ?? null,
+      status: user.status === "online" ? "online" : "offline",
+    })),
+  };
+}
+
 /**
  * Searches users by username or email for starting conversations,
  * excluding the requesting user and sensitive internal fields.

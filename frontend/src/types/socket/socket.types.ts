@@ -1,4 +1,5 @@
 import type { ManagerOptions, Socket, SocketOptions } from "socket.io-client";
+import type { Conversation, ParticipantRole } from "@/types/conversations";
 import type { Message } from "@/types/messages";
 
 export type SocketAck<T = unknown> = {
@@ -29,11 +30,46 @@ export interface UserStatusEventPayload {
   status: "online" | "offline";
 }
 
+export interface ConversationCreatedEventPayload {
+  conversation: Conversation;
+}
+
+export interface ConversationUpdatedEventPayload {
+  conversationId: string;
+  conversation: Conversation;
+}
+
+export interface ParticipantAddedEventPayload {
+  conversationId: string;
+  userIds: string[];
+  conversation: Conversation;
+}
+
+export interface ParticipantRemovedEventPayload {
+  conversationId: string;
+  userId: string;
+  deleted?: boolean;
+  promotedAdminId?: string | null;
+}
+
+export interface ParticipantRoleChangedEventPayload {
+  conversationId: string;
+  userId: string;
+  role: ParticipantRole;
+}
+
 export interface ServerToClientEvents {
   "message:new": (payload: MessageNewEventPayload) => void;
   "message:read_update": (payload: MessageReadUpdateEventPayload) => void;
   "user:typing": (payload: UserTypingEventPayload) => void;
   "user:status": (payload: UserStatusEventPayload) => void;
+  "conversation:created": (payload: ConversationCreatedEventPayload) => void;
+  "conversation:updated": (payload: ConversationUpdatedEventPayload) => void;
+  "participant:added": (payload: ParticipantAddedEventPayload) => void;
+  "participant:removed": (payload: ParticipantRemovedEventPayload) => void;
+  "participant:role_changed": (
+    payload: ParticipantRoleChangedEventPayload,
+  ) => void;
 }
 
 export interface ClientToServerEvents {

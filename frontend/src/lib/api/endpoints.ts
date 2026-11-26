@@ -16,16 +16,24 @@ export const SESSION_ENDPOINTS = {
 
 export const USER_ENDPOINTS = {
   search: "/api/users/search",
+  batch: "/api/users/batch",
 } as const;
 
 export const CONVERSATION_ENDPOINTS = {
   list: "/api/conversations",
   create: "/api/conversations",
-  direct: "/api/conversations/direct",
   byId: (conversationId: string): string =>
     `/api/conversations/${encodeURIComponent(conversationId)}`,
   hide: (conversationId: string): string =>
     `/api/conversations/${encodeURIComponent(conversationId)}/hide`,
+  participants: (conversationId: string): string =>
+    `/api/conversations/${encodeURIComponent(conversationId)}/participants`,
+  participantById: (conversationId: string, userId: string): string =>
+    `/api/conversations/${encodeURIComponent(conversationId)}/participants/${encodeURIComponent(userId)}`,
+  participantRole: (conversationId: string, userId: string): string =>
+    `/api/conversations/${encodeURIComponent(conversationId)}/participants/${encodeURIComponent(userId)}/role`,
+  leave: (conversationId: string): string =>
+    `/api/conversations/${encodeURIComponent(conversationId)}/leave`,
 } as const;
 
 export const MESSAGE_ENDPOINTS = {

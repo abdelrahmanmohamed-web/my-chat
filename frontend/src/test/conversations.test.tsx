@@ -10,9 +10,14 @@ import {
 import {
   TEST_CONVERSATION_ID,
   TEST_CONVERSATIONS,
+  TEST_GROUP_CONVERSATION,
+  TEST_GROUP_CONVERSATION_ID,
   TEST_MESSAGES_NEWEST_FIRST,
+  TEST_OTHER_USER_ID,
+  TEST_PUBLIC_PROFILES,
   TEST_SEARCH_USERS,
   TEST_SECOND_CONVERSATION_ID,
+  TEST_THIRD_USER_ID,
   TEST_USER,
 } from "@/test/msw/fixtures";
 import { mswServer } from "@/test/msw/server";
@@ -20,11 +25,13 @@ import { renderAppAt } from "@/test/render-app";
 import {
   conversationUpdateSchema,
   directConversationSchema,
+  groupConversationSchema,
   userSearchQuerySchema,
+  type Conversation,
 } from "@/types/conversations";
 
 describe("conversations schemas & cache helpers", () => {
-  it("validates user search, direct conversation, and update schemas", () => {
+  it("validates user search, direct, group, and update schemas", () => {
     expect(userSearchQuerySchema.safeParse({ q: "  سارة  " }).success).toBe(
       true,
     );
@@ -38,6 +45,21 @@ describe("conversations schemas & cache helpers", () => {
     expect(
       directConversationSchema.safeParse({ participantId: "invalid-id" })
         .success,
+    ).toBe(false);
+
+    expect(
+      groupConversationSchema.safeParse({
+        type: "group",
+        name: "فريق التصميم",
+        participantIds: [TEST_SEARCH_USERS[0].id],
+      }).success,
+    ).toBe(true);
+    expect(
+      groupConversationSchema.safeParse({
+        type: "group",
+        name: "   ",
+        participantIds: [TEST_SEARCH_USERS[0].id],
+      }).success,
     ).toBe(false);
 
     expect(conversationUpdateSchema.safeParse({}).success).toBe(false);
@@ -92,7 +114,7 @@ describe("conversations schemas & cache helpers", () => {
 
 describe("conversations UI flows", () => {
   it("lists conversations, filters locally, creates new direct chat via user search, renames, and hides", async () => {
-    let conversations = [...TEST_CONVERSATIONS];
+    let conversations: Conversation[] = [...TEST_CONVERSATIONS];
     const searchQueries: string[] = [];
 
     mswServer.use(
@@ -113,20 +135,31 @@ describe("conversations UI flows", () => {
         });
       }),
       http.post("*/api/conversations", async ({ request }) => {
-        const body = (await request.json()) as { participantId: string };
+        const body = (await request.json()) as {
+          type?: "direct" | "group";
+          participantId?: string;
+        };
         const matched = TEST_SEARCH_USERS.find(
           (u) => u.id === body.participantId,
         );
-        const created = {
+        const now = "2026-11-12T16:00:00.000Z";
+        const created: Conversation = {
           _id: "65f1a9c2e4b0a1b2c3d4e699",
-          type: "direct" as const,
-          participantIds: [TEST_USER.id, body.participantId],
+          type: "direct",
+          participants: [
+            { userId: TEST_USER.id, role: "member", joinedAt: now },
+            {
+              userId: body.participantId ?? TEST_OTHER_USER_ID,
+              role: "member",
+              joinedAt: now,
+            },
+          ],
           hiddenFor: [],
           name: matched?.displayName ?? "محادثة جديدة",
           avatarUrl: null,
-          lastMessageAt: "2026-11-12T16:00:00.000Z",
-          createdAt: "2026-11-12T16:00:00.000Z",
-          updatedAt: "2026-11-12T16:00:00.000Z",
+          lastMessageAt: now,
+          createdAt: now,
+          updatedAt: now,
         };
         conversations = [created, ...conversations];
         return HttpResponse.json({ conversation: created }, { status: 201 });
@@ -213,5 +246,269 @@ describe("conversations UI flows", () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe("/");
     });
+  });
+
+  it("creates a group, opens GroupDetailsDialog from header, enforces admin vs member controls, and leaves group", async () => {
+    let conversations: Conversation[] = [
+      ...TEST_CONVERSATIONS,
+      TEST_GROUP_CONVERSATION,
+    ];
+
+    mswServer.use(
+      http.get("*/api/conversations", () =>
+        HttpResponse.json({ conversations }),
+      ),
+      http.post("*/api/users/batch", async ({ request }) => {
+        const body = (await request.json()) as { userIds: string[] };
+        const idSet = new Set(body.userIds);
+        return HttpResponse.json({
+          users: TEST_PUBLIC_PROFILES.filter((u) => idSet.has(u.id)),
+        });
+      }),
+      http.get("*/api/users/search", ({ request }) => {
+        const q = new URL(request.url).searchParams.get("q") ?? "";
+        return HttpResponse.json({
+          users: TEST_SEARCH_USERS.filter(
+            (u) => u.username.includes(q) || u.displayName.includes(q),
+          ),
+        });
+      }),
+      http.post("*/api/conversations", async ({ request }) => {
+        const body = (await request.json()) as {
+          type?: "direct" | "group";
+          name?: string;
+          participantIds?: string[];
+          participantId?: string;
+        };
+        if (body.type === "group") {
+          const now = "2026-11-12T17:00:00.000Z";
+          const created: Conversation = {
+            _id: "65f1a9c2e4b0a1b2c3d4e690",
+            type: "group",
+            createdBy: TEST_USER.id,
+            participants: [
+              { userId: TEST_USER.id, role: "admin", joinedAt: now },
+              ...(body.participantIds ?? []).map((id) => ({
+                userId: id,
+                role: "member" as const,
+                joinedAt: now,
+              })),
+            ],
+            hiddenFor: [],
+            name: body.name ?? "مجموعة",
+            avatarUrl: null,
+            lastMessageAt: now,
+            createdAt: now,
+            updatedAt: now,
+          };
+          conversations = [created, ...conversations];
+          return HttpResponse.json({ conversation: created }, { status: 201 });
+        }
+        return HttpResponse.json({ conversation: TEST_CONVERSATIONS[0] });
+      }),
+      http.patch(
+        "*/api/conversations/:conversationId",
+        async ({ params, request }) => {
+          const body = (await request.json()) as {
+            name?: string | null;
+            avatarUrl?: string | null;
+          };
+          conversations = conversations.map((c) =>
+            c._id === params.conversationId
+              ? {
+                  ...c,
+                  ...(body.name !== undefined ? { name: body.name } : {}),
+                  ...(body.avatarUrl !== undefined
+                    ? { avatarUrl: body.avatarUrl }
+                    : {}),
+                }
+              : c,
+          );
+          const updated = conversations.find(
+            (c) => c._id === params.conversationId,
+          );
+          return HttpResponse.json({ conversation: updated });
+        },
+      ),
+      http.patch(
+        "*/api/conversations/:conversationId/participants/:userId/role",
+        async ({ params, request }) => {
+          const body = (await request.json()) as { role: "admin" | "member" };
+          conversations = conversations.map((c) =>
+            c._id === params.conversationId
+              ? {
+                  ...c,
+                  participants: c.participants.map((p) =>
+                    p.userId === params.userId ? { ...p, role: body.role } : p,
+                  ),
+                }
+              : c,
+          );
+          const updated = conversations.find(
+            (c) => c._id === params.conversationId,
+          );
+          return HttpResponse.json({ conversation: updated });
+        },
+      ),
+      http.delete(
+        "*/api/conversations/:conversationId/participants/:userId",
+        ({ params }) => {
+          conversations = conversations.map((c) =>
+            c._id === params.conversationId
+              ? {
+                  ...c,
+                  participants: c.participants.filter(
+                    (p) => p.userId !== params.userId,
+                  ),
+                }
+              : c,
+          );
+          const updated = conversations.find(
+            (c) => c._id === params.conversationId,
+          );
+          return HttpResponse.json({ conversation: updated });
+        },
+      ),
+      http.post("*/api/conversations/:conversationId/leave", ({ params }) => {
+        conversations = conversations.filter(
+          (c) => c._id !== params.conversationId,
+        );
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    // 1. Open group as admin (TEST_USER)
+    const { router } = renderAppAt(
+      `/conversations/${TEST_GROUP_CONVERSATION_ID}`,
+    );
+
+    const headerButton = await screen.findByRole("button", {
+      name: "تفاصيل المجموعة فريق التطوير",
+    });
+    fireEvent.click(headerButton);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("تغيير الصورة")).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "تغيير اسم المجموعة" }),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText("إضافة أعضاء")).toBeInTheDocument();
+    expect(await within(dialog).findByText("سارة علي")).toBeInTheDocument();
+
+    // Update avatarUrl as admin
+    fireEvent.click(within(dialog).getByText("تغيير الصورة"));
+    fireEvent.change(
+      within(dialog).getByLabelText("رابط صورة المجموعة"),
+      { target: { value: "https://example.com/new-avatar.png" } },
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "حفظ" }));
+
+    // Click member row as admin -> sees DM, Promote, Kick
+    const saraRow = await within(dialog).findByRole("button", {
+      name: /سارة علي/,
+    });
+    fireEvent.click(saraRow);
+
+    expect(
+      await screen.findByText("إرسال رسالة على الخاص"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("ترقية إلى مشرف")).toBeInTheDocument();
+    expect(screen.getByText("طرد من المجموعة")).toBeInTheDocument();
+
+    // Promote Sara to admin -> also closes Sara's dropdown menu
+    fireEvent.click(screen.getByText("ترقية إلى مشرف"));
+    await waitFor(() => {
+      expect(screen.queryByText("طرد من المجموعة")).not.toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(within(saraRow).getByText("مشرف")).toBeInTheDocument();
+    });
+
+    // Kick Omar
+    const omarRow = within(dialog).getByRole("button", {
+      name: /عمر خالد/,
+    });
+    fireEvent.click(omarRow);
+    fireEvent.click(await screen.findByText("طرد من المجموعة"));
+
+    await waitFor(() => {
+      expect(
+        within(dialog).queryByText("عمر خالد"),
+      ).not.toBeInTheDocument();
+    });
+
+    // Leave group -> redirects to /
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "مغادرة المجموعة" }),
+    );
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/");
+    });
+  });
+
+  it("hides admin-only controls in GroupDetailsDialog for non-admin members", async () => {
+    const memberGroup: Conversation = {
+      ...TEST_GROUP_CONVERSATION,
+      _id: "65f1a9c2e4b0a1b2c3d4e609",
+      participants: [
+        {
+          userId: TEST_OTHER_USER_ID,
+          role: "admin",
+          joinedAt: "2026-11-12T09:00:00.000Z",
+        },
+        {
+          userId: TEST_USER.id,
+          role: "member",
+          joinedAt: "2026-11-12T09:00:00.000Z",
+        },
+        {
+          userId: TEST_THIRD_USER_ID,
+          role: "member",
+          joinedAt: "2026-11-12T09:00:00.000Z",
+        },
+      ],
+    };
+
+    mswServer.use(
+      http.get("*/api/conversations", () =>
+        HttpResponse.json({ conversations: [memberGroup] }),
+      ),
+      http.post("*/api/users/batch", async ({ request }) => {
+        const body = (await request.json()) as { userIds: string[] };
+        const idSet = new Set(body.userIds);
+        return HttpResponse.json({
+          users: TEST_PUBLIC_PROFILES.filter((u) => idSet.has(u.id)),
+        });
+      }),
+    );
+
+    renderAppAt(`/conversations/${memberGroup._id}`);
+
+    const headerButton = await screen.findByRole("button", {
+      name: "تفاصيل المجموعة فريق التطوير",
+    });
+    fireEvent.click(headerButton);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByText("تغيير الصورة")).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole("button", { name: "تغيير اسم المجموعة" }),
+    ).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("إضافة أعضاء")).not.toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "مغادرة المجموعة" }),
+    ).toBeInTheDocument();
+
+    // Clicking a member as non-admin shows ONLY DM option (no kick or role change)
+    const saraRow = await within(dialog).findByRole("button", {
+      name: /سارة علي/,
+    });
+    fireEvent.click(saraRow);
+
+    expect(
+      await screen.findByText("إرسال رسالة على الخاص"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("طرد من المجموعة")).not.toBeInTheDocument();
+    expect(screen.queryByText("ترقية إلى مشرف")).not.toBeInTheDocument();
   });
 });

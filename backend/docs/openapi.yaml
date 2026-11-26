@@ -644,6 +644,62 @@ paths:
           "$ref": "#/components/responses/TooManyRequests"
         "500":
           "$ref": "#/components/responses/InternalServerError"
+  "/api/users/batch":
+    post:
+      tags:
+        - Users
+      operationId: getUsersBatch
+      summary: Fetch public profiles for a list of user IDs
+      description: "Resolves sanitized public profiles (`id`, `username`, `displayName`, `avatarUrl`, `status`) for a batch of user ObjectIds."
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        description: Batch of user IDs to fetch.
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/UsersBatchRequest"
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Resolved user profiles.
+          content:
+            "application/json":
+              schema:
+                type: object
+                required:
+                  - users
+                properties:
+                  users:
+                    type: array
+                    items:
+                      "$ref": "#/components/schemas/PublicUserProfile"
+        "400":
+          description: Invalid user IDs payload or malformed JSON.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              examples:
+                invalidUserIds:
+                  value:
+                    error: Invalid user IDs payload
+                malformedJson:
+                  value:
+                    error: Bad request
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "413":
+          "$ref": "#/components/responses/PayloadTooLarge"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
   "/api/conversations/{conversationId}/messages":
     get:
       tags:
@@ -1473,6 +1529,19 @@ components:
           description: "Target participant role within the group ('admin' or 'member')."
       required:
         - role
+    UsersBatchRequest:
+      type: object
+      properties:
+        userIds:
+          minItems: 1
+          maxItems: 100
+          type: array
+          items:
+            type: string
+            minLength: 1
+          description: "Array of user ObjectIds (1-100) to fetch public profiles for."
+      required:
+        - userIds
     ConversationUpdateRequest:
       type: object
       properties:
@@ -1596,6 +1665,31 @@ components:
         email:
           type: string
           format: email
+        username:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum:
+            - online
+            - offline
+    PublicUserProfile:
+      type: object
+      required:
+        - id
+        - username
+        - displayName
+        - avatarUrl
+        - status
+      description: Sanitized public profile returned by POST /api/users/batch.
+      properties:
+        id:
+          type: string
+          pattern: "^[0-9a-fA-F]{24}$"
         username:
           type: string
         displayName:

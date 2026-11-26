@@ -12,7 +12,7 @@ export type {
   LocalMessageStatus,
   MarkMessageReadResponse,
   Message,
-  MessageRead,
   MessageResponse,
+  MessageType,
   SendMessageRequest,
 } from "./messages.types";

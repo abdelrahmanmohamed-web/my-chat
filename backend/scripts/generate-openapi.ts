@@ -31,6 +31,7 @@ import {
   conversationUpdateSchema,
   createConversationSchema,
   updateParticipantRoleSchema,
+  usersBatchSchema,
   userSearchQuerySchema,
 } from "../src/modules/conversations/conversation.schemas.ts";
 import {
@@ -386,6 +387,13 @@ function buildZodComponentSchemas(): Record<string, JsonObject> {
       },
     ),
 
+    UsersBatchRequest: convertZodToOpenApiSchema(usersBatchSchema, (s) => {
+      const props = s.properties as Record<string, JsonObject>;
+      props.userIds.description =
+        "Array of user ObjectIds (1-100) to fetch public profiles for.";
+      return s;
+    }),
+
     ConversationUpdateRequest: convertZodToOpenApiSchema(
       conversationUpdateSchema,
       (s) => {
@@ -567,6 +575,20 @@ function buildReusableComponents(): JsonObject {
         properties: {
           id: { type: "string", pattern: OBJECT_ID_PATTERN },
           email: { type: "string", format: "email" },
+          username: { type: "string" },
+          displayName: { type: "string" },
+          avatarUrl: { type: "string", nullable: true },
+          status: { type: "string", enum: ["online", "offline"] },
+        },
+      },
+
+      PublicUserProfile: {
+        type: "object",
+        required: ["id", "username", "displayName", "avatarUrl", "status"],
+        description:
+          "Sanitized public profile returned by POST /api/users/batch.",
+        properties: {
+          id: { type: "string", pattern: OBJECT_ID_PATTERN },
           username: { type: "string" },
           displayName: { type: "string" },
           avatarUrl: { type: "string", nullable: true },
@@ -1368,6 +1390,45 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
         ),
       },
       "401": { $ref: "#/components/responses/Unauthorized" },
+      "429": { $ref: "#/components/responses/TooManyRequests" },
+      "500": { $ref: "#/components/responses/InternalServerError" },
+    },
+  },
+
+  "POST /api/users/batch": {
+    operationId: "getUsersBatch",
+    tags: ["Users"],
+    summary: "Fetch public profiles for a list of user IDs",
+    description:
+      "Resolves sanitized public profiles (`id`, `username`, `displayName`, `avatarUrl`, `status`) for a batch of user ObjectIds.",
+    requestBody: {
+      required: true,
+      description: "Batch of user IDs to fetch.",
+      schemaRef: "UsersBatchRequest",
+    },
+    responses: {
+      "200": {
+        description: "Resolved user profiles.",
+        content: jsonInline({
+          type: "object",
+          required: ["users"],
+          properties: {
+            users: {
+              type: "array",
+              items: { $ref: "#/components/schemas/PublicUserProfile" },
+            },
+          },
+        }),
+      },
+      "400": {
+        description: "Invalid user IDs payload or malformed JSON.",
+        content: jsonErrorWithMalformedExample(
+          "invalidUserIds",
+          "Invalid user IDs payload",
+        ),
+      },
+      "401": { $ref: "#/components/responses/Unauthorized" },
+      "413": { $ref: "#/components/responses/PayloadTooLarge" },
       "429": { $ref: "#/components/responses/TooManyRequests" },
       "500": { $ref: "#/components/responses/InternalServerError" },
     },

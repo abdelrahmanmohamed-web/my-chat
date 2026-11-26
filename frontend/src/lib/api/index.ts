@@ -26,14 +26,19 @@ export {
   updateSessionName,
 } from "./services/auth";
 export {
+  addGroupParticipants,
+  createConversation,
   createDirectConversation,
   hideConversation,
+  leaveGroupConversation,
   listConversations,
+  removeGroupParticipant,
   updateConversation,
+  updateGroupParticipantRole,
 } from "./services/conversations";
 export {
   listMessages,
   markMessageReadRest,
   sendMessageRest,
 } from "./services/messages";
-export { searchUsers } from "./services/users";
+export { getUsersBatch, searchUsers } from "./services/users";

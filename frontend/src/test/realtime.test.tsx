@@ -12,6 +12,7 @@ import { createFakeRealtimeSocket } from "./fake-socket";
 import {
   TEST_CONVERSATION_ID,
   TEST_CONVERSATIONS,
+  TEST_GROUP_CONVERSATION,
   TEST_MESSAGES_NEWEST_FIRST,
   TEST_OTHER_USER_ID,
   TEST_SECOND_CONVERSATION_ID,
@@ -133,9 +134,9 @@ describe("Phase 3 realtime & socket integration", () => {
       _id: "65f1a9c2e4b0a1b2c3d4e888",
       conversationId: TEST_CONVERSATION_ID,
       senderId: TEST_OTHER_USER_ID,
+      type: "user",
       content: "رسالة لحظية بدون تكرار",
       clientId: "cid-realtime-1",
-      reads: [],
       expiresAt: null,
       createdAt: "2026-11-12T12:20:00.000Z",
       updatedAt: "2026-11-12T12:20:00.000Z",
@@ -164,9 +165,9 @@ describe("Phase 3 realtime & socket integration", () => {
       _id: "65f1a9c2e4b0a1b2c3d4e889",
       conversationId: TEST_SECOND_CONVERSATION_ID,
       senderId: "65f1a9c2e4b0a1b2c3d4e503",
+      type: "user",
       content: "رسالة في المحادثة الثانية",
       clientId: null,
-      reads: [],
       expiresAt: null,
       createdAt: "2026-11-12T12:25:00.000Z",
       updatedAt: "2026-11-12T12:25:00.000Z",
@@ -198,9 +199,9 @@ describe("Phase 3 realtime & socket integration", () => {
       _id: "65f1a9c2e4b0a1b2c3d4e890",
       conversationId: TEST_CONVERSATION_ID,
       senderId: TEST_USER.id,
+      type: "user",
       content: "رسالتي بانتظار القراءة",
       clientId: "cid-own-1",
-      reads: [],
       expiresAt: null,
       createdAt: "2026-11-12T12:26:00.000Z",
       updatedAt: "2026-11-12T12:26:00.000Z",
@@ -322,5 +323,74 @@ describe("Phase 3 realtime & socket integration", () => {
     expect(
       await screen.findByText("ليس لديك صلاحية الوصول إلى هذه المحادثة."),
     ).toBeInTheDocument();
+  });
+
+  it("handles group lifecycle socket events (conversation:created, participant:role_changed, participant:removed)", async () => {
+    const fakeSocket = createFakeRealtimeSocket();
+    let conversationsFetchCount = 0;
+
+    mswServer.use(
+      http.get("*/api/conversations", () => {
+        conversationsFetchCount += 1;
+        return HttpResponse.json({ conversations: TEST_CONVERSATIONS });
+      }),
+      http.get("*/api/conversations/:conversationId/messages", () =>
+        HttpResponse.json({ messages: [], nextCursor: null }),
+      ),
+    );
+
+    const { router } = renderAppAt("/", {
+      socketInstance: fakeSocket,
+    });
+
+    await screen.findByText("سارة علي");
+    act(() => {
+      fakeSocket.simulateConnect("websocket");
+    });
+
+    await waitFor(() => {
+      expect(conversationsFetchCount).toBeGreaterThanOrEqual(2);
+    });
+
+    // Server emits conversation:created for a new group
+    act(() => {
+      fakeSocket.emitServerEvent("conversation:created", {
+        conversation: TEST_GROUP_CONVERSATION,
+      });
+    });
+
+    expect(await screen.findByText("فريق التطوير")).toBeInTheDocument();
+
+    // Navigate into group, promote another member, then remove current user -> redirects to /
+    await act(async () => {
+      await router.navigate(`/conversations/${TEST_GROUP_CONVERSATION._id}`);
+    });
+
+    act(() => {
+      fakeSocket.emitServerEvent("participant:role_changed", {
+        conversationId: TEST_GROUP_CONVERSATION._id,
+        userId: TEST_OTHER_USER_ID,
+        role: "admin",
+      });
+    });
+
+    const updated = queryClient.getQueryData<typeof TEST_CONVERSATIONS>(
+      QUERY_KEYS.conversations,
+    );
+    const group = updated?.find((c) => c._id === TEST_GROUP_CONVERSATION._id);
+    expect(
+      group?.participants.find((p) => p.userId === TEST_OTHER_USER_ID)?.role,
+    ).toBe("admin");
+
+    act(() => {
+      fakeSocket.emitServerEvent("participant:removed", {
+        conversationId: TEST_GROUP_CONVERSATION._id,
+        userId: TEST_USER.id,
+      });
+    });
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/");
+    });
   });
 });

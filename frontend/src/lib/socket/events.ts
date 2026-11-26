@@ -13,6 +13,11 @@ export const SOCKET_EVENTS = {
   messageReadUpdate: "message:read_update",
   userTyping: "user:typing",
   userStatus: "user:status",
+  conversationCreated: "conversation:created",
+  conversationUpdated: "conversation:updated",
+  participantAdded: "participant:added",
+  participantRemoved: "participant:removed",
+  participantRoleChanged: "participant:role_changed",
   joinConversation: "join:conversation",
   leaveConversation: "leave:conversation",
   messageSend: "message:send",
@@ -100,6 +105,26 @@ export interface RealtimeSocket {
     event: "user:status",
     listener: ServerToClientEvents["user:status"],
   ): unknown;
+  on(
+    event: "conversation:created",
+    listener: ServerToClientEvents["conversation:created"],
+  ): unknown;
+  on(
+    event: "conversation:updated",
+    listener: ServerToClientEvents["conversation:updated"],
+  ): unknown;
+  on(
+    event: "participant:added",
+    listener: ServerToClientEvents["participant:added"],
+  ): unknown;
+  on(
+    event: "participant:removed",
+    listener: ServerToClientEvents["participant:removed"],
+  ): unknown;
+  on(
+    event: "participant:role_changed",
+    listener: ServerToClientEvents["participant:role_changed"],
+  ): unknown;
   off(event: "connect", listener: () => void): unknown;
   off(event: "disconnect", listener: (reason: string) => void): unknown;
   off(event: "connect_error", listener: (error: Error) => void): unknown;
@@ -118,6 +143,26 @@ export interface RealtimeSocket {
   off(
     event: "user:status",
     listener: ServerToClientEvents["user:status"],
+  ): unknown;
+  off(
+    event: "conversation:created",
+    listener: ServerToClientEvents["conversation:created"],
+  ): unknown;
+  off(
+    event: "conversation:updated",
+    listener: ServerToClientEvents["conversation:updated"],
+  ): unknown;
+  off(
+    event: "participant:added",
+    listener: ServerToClientEvents["participant:added"],
+  ): unknown;
+  off(
+    event: "participant:removed",
+    listener: ServerToClientEvents["participant:removed"],
+  ): unknown;
+  off(
+    event: "participant:role_changed",
+    listener: ServerToClientEvents["participant:role_changed"],
   ): unknown;
   emit(
     event: "join:conversation",

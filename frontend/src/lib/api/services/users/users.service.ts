@@ -1,6 +1,8 @@
 import { USER_ENDPOINTS } from "@/lib/api/endpoints";
 import { httpClient } from "@/lib/api/http";
 import type {
+  UsersBatchRequest,
+  UsersBatchResponse,
   UserSearchParams,
   UserSearchResponse,
 } from "@/types/conversations";
@@ -15,6 +17,18 @@ export async function searchUsers(
       params,
       signal: options?.signal,
     },
+  );
+  return data;
+}
+
+export async function getUsersBatch(
+  payload: UsersBatchRequest,
+  options?: { signal?: AbortSignal },
+): Promise<UsersBatchResponse> {
+  const { data } = await httpClient.post<UsersBatchResponse>(
+    USER_ENDPOINTS.batch,
+    payload,
+    { signal: options?.signal },
   );
   return data;
 }

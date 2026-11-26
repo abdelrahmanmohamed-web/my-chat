@@ -2,11 +2,17 @@ import type { QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { QUERY_KEYS } from "@/app/query-client";
 import {
-  applyReadUpdateToCache,
   type ChatMessagesInfiniteData,
   upsertMessageInCache,
 } from "@/features/chat/messages.cache";
-import { updateConversationLastMessageInCache } from "@/features/conversations/conversations.cache";
+import {
+  removeConversationFromCache,
+  removeParticipantFromConversationInCache,
+  updateConversationLastMessageInCache,
+  updateConversationParticipantReadInCache,
+  updateParticipantRoleInCache,
+  upsertConversationInCache,
+} from "@/features/conversations/conversations.cache";
 import { refreshSession } from "@/lib/api";
 import {
   getAccessToken,
@@ -18,8 +24,13 @@ import {
 } from "@/stores";
 import type { Conversation } from "@/types/conversations";
 import type {
+  ConversationCreatedEventPayload,
+  ConversationUpdatedEventPayload,
   MessageNewEventPayload,
   MessageReadUpdateEventPayload,
+  ParticipantAddedEventPayload,
+  ParticipantRemovedEventPayload,
+  ParticipantRoleChangedEventPayload,
   SocketAck,
   SocketTransportName,
 } from "@/types/socket";
@@ -99,7 +110,7 @@ export function emitLeaveConversation(
 }
 
 /**
- * Registers all Phase 3 realtime listeners onto a typed socket and returns
+ * Registers all realtime listeners onto a typed socket and returns
  * a deterministic cleanup callback safe under React StrictMode double-mounts.
  */
 export function registerRealtimeHandlers(
@@ -345,23 +356,14 @@ export function registerRealtimeHandlers(
   };
 
   const handleMessageReadUpdate = (payload: MessageReadUpdateEventPayload) => {
-    const messagesQueryKey = QUERY_KEYS.messages(payload.conversationId);
-    if (
-      queryClient.getQueryData<ChatMessagesInfiniteData>(messagesQueryKey) ===
-      undefined
-    ) {
-      return;
-    }
-
-    queryClient.setQueryData<ChatMessagesInfiniteData>(
-      messagesQueryKey,
+    queryClient.setQueryData<Conversation[]>(
+      QUERY_KEYS.conversations,
       (current) =>
-        current
-          ? applyReadUpdateToCache(current, {
-              userId: payload.userId,
-              lastReadMessageId: payload.lastReadMessageId,
-            })
-          : current,
+        updateConversationParticipantReadInCache(current, {
+          conversationId: payload.conversationId,
+          userId: payload.userId,
+          lastReadMessageId: payload.lastReadMessageId,
+        }),
     );
   };
 
@@ -382,6 +384,82 @@ export function registerRealtimeHandlers(
     usePresenceStore.getState().setUserStatus(payload.userId, payload.status);
   };
 
+  const handleConversationCreated = (
+    payload: ConversationCreatedEventPayload,
+  ) => {
+    queryClient.setQueryData<Conversation[]>(
+      QUERY_KEYS.conversations,
+      (current) => upsertConversationInCache(current, payload.conversation),
+    );
+  };
+
+  const handleConversationUpdated = (
+    payload: ConversationUpdatedEventPayload,
+  ) => {
+    queryClient.setQueryData<Conversation[]>(
+      QUERY_KEYS.conversations,
+      (current) => upsertConversationInCache(current, payload.conversation),
+    );
+  };
+
+  const handleParticipantAdded = (payload: ParticipantAddedEventPayload) => {
+    queryClient.setQueryData<Conversation[]>(
+      QUERY_KEYS.conversations,
+      (current) => upsertConversationInCache(current, payload.conversation),
+    );
+  };
+
+  const handleParticipantRemoved = (
+    payload: ParticipantRemovedEventPayload,
+  ) => {
+    const currentUserId = useAuthStore.getState().user?.id;
+    if (currentUserId && payload.userId === currentUserId) {
+      queryClient.setQueryData<Conversation[]>(
+        QUERY_KEYS.conversations,
+        (current) => removeConversationFromCache(current, payload.conversationId),
+      );
+      queryClient.removeQueries({
+        queryKey: QUERY_KEYS.messages(payload.conversationId),
+        exact: true,
+      });
+
+      if (
+        useConnectionStore.getState().activeConversationId ===
+        payload.conversationId
+      ) {
+        useConnectionStore.getState().setJoinError({
+          conversationId: payload.conversationId,
+          error: "Forbidden: Not a participant",
+        });
+      }
+      return;
+    }
+
+    queryClient.setQueryData<Conversation[]>(
+      QUERY_KEYS.conversations,
+      (current) =>
+        removeParticipantFromConversationInCache(current, {
+          conversationId: payload.conversationId,
+          userId: payload.userId,
+          promotedAdminId: payload.promotedAdminId,
+        }),
+    );
+  };
+
+  const handleParticipantRoleChanged = (
+    payload: ParticipantRoleChangedEventPayload,
+  ) => {
+    queryClient.setQueryData<Conversation[]>(
+      QUERY_KEYS.conversations,
+      (current) =>
+        updateParticipantRoleInCache(current, {
+          conversationId: payload.conversationId,
+          userId: payload.userId,
+          role: payload.role,
+        }),
+    );
+  };
+
   socketInstance.on("connect", handleConnect);
   socketInstance.on("disconnect", handleDisconnect);
   socketInstance.on("connect_error", handleConnectError);
@@ -389,6 +467,11 @@ export function registerRealtimeHandlers(
   socketInstance.on("message:read_update", handleMessageReadUpdate);
   socketInstance.on("user:typing", handleUserTyping);
   socketInstance.on("user:status", handleUserStatus);
+  socketInstance.on("conversation:created", handleConversationCreated);
+  socketInstance.on("conversation:updated", handleConversationUpdated);
+  socketInstance.on("participant:added", handleParticipantAdded);
+  socketInstance.on("participant:removed", handleParticipantRemoved);
+  socketInstance.on("participant:role_changed", handleParticipantRoleChanged);
   socketInstance.io?.on("reconnect_attempt", handleReconnectAttempt);
 
   return () => {
@@ -401,6 +484,11 @@ export function registerRealtimeHandlers(
     socketInstance.off("message:read_update", handleMessageReadUpdate);
     socketInstance.off("user:typing", handleUserTyping);
     socketInstance.off("user:status", handleUserStatus);
+    socketInstance.off("conversation:created", handleConversationCreated);
+    socketInstance.off("conversation:updated", handleConversationUpdated);
+    socketInstance.off("participant:added", handleParticipantAdded);
+    socketInstance.off("participant:removed", handleParticipantRemoved);
+    socketInstance.off("participant:role_changed", handleParticipantRoleChanged);
     socketInstance.io?.off("reconnect_attempt", handleReconnectAttempt);
   };
 }

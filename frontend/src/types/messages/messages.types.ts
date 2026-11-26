@@ -1,10 +1,5 @@
 export type LocalMessageStatus = "sending" | "sent" | "failed";
-
-export interface MessageRead {
-  _id?: string;
-  userId: string;
-  lastReadMessageId: string;
-}
+export type MessageType = "user" | "system";
 
 /**
  * Persisted message document returned by REST and Socket.io payloads.
@@ -13,9 +8,9 @@ export interface Message {
   _id: string;
   conversationId: string;
   senderId: string;
+  type: MessageType;
   content: string;
   clientId: string | null;
-  reads: MessageRead[];
   expiresAt: string | null;
   createdAt: string;
   updatedAt: string;

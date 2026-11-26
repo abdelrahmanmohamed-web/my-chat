@@ -1,4 +1,4 @@
-import type { Conversation } from "@/types/conversations";
+import type { Conversation, ParticipantRole } from "@/types/conversations";
 import type { Message } from "@/types/messages";
 
 const LAST_MESSAGE_PREVIEW_MAX_LENGTH = 200;
@@ -6,10 +6,76 @@ const LAST_MESSAGE_PREVIEW_MAX_LENGTH = 200;
 function getConversationActivityTimestamp(conversation: Conversation): number {
   const iso =
     conversation.lastMessageAt ??
-    conversation.updatedAt ??
-    conversation.createdAt;
+    conversation.createdAt ??
+    conversation.updatedAt;
   const parsed = Date.parse(iso);
   return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+export function getParticipantIds(
+  conversation: Pick<Conversation, "participants"> | null | undefined,
+): string[] {
+  if (!conversation?.participants) {
+    return [];
+  }
+  return conversation.participants.map((p) => p.userId);
+}
+
+export function getOtherDirectParticipantId(
+  conversation: Pick<Conversation, "type" | "participants"> | null | undefined,
+  currentUserId: string,
+): string | null {
+  if (!conversation || conversation.type !== "direct") {
+    return null;
+  }
+  return (
+    conversation.participants.find((p) => p.userId !== currentUserId)
+      ?.userId ?? null
+  );
+}
+
+export function isConversationAdmin(
+  conversation: Pick<Conversation, "participants"> | null | undefined,
+  userId: string,
+): boolean {
+  if (!conversation?.participants || !userId) {
+    return false;
+  }
+  return conversation.participants.some(
+    (p) => p.userId === userId && p.role === "admin",
+  );
+}
+
+export function getOtherParticipantsLastReadIds(
+  conversation: Pick<Conversation, "participants"> | null | undefined,
+  currentUserId: string,
+): string[] {
+  if (!conversation?.participants) {
+    return [];
+  }
+  const ids: string[] = [];
+  for (const participant of conversation.participants) {
+    if (
+      participant.userId !== currentUserId &&
+      participant.lastReadMessageId
+    ) {
+      ids.push(participant.lastReadMessageId);
+    }
+  }
+  return ids;
+}
+
+export function getCurrentUserLastReadId(
+  conversation: Pick<Conversation, "participants"> | null | undefined,
+  currentUserId: string,
+): string | null {
+  if (!conversation?.participants || !currentUserId) {
+    return null;
+  }
+  return (
+    conversation.participants.find((p) => p.userId === currentUserId)
+      ?.lastReadMessageId ?? null
+  );
 }
 
 /**
@@ -96,6 +162,127 @@ export function updateConversationLastMessageInCache(
   }
 
   return sortConversationsByActivity(updated);
+}
+
+/**
+ * Updates a participant's lastReadMessageId pointer inside the cached conversation.
+ */
+export function updateConversationParticipantReadInCache(
+  conversations: Conversation[] | undefined,
+  params: {
+    conversationId: string;
+    userId: string;
+    lastReadMessageId: string;
+  },
+): Conversation[] | undefined {
+  if (!conversations) {
+    return conversations;
+  }
+
+  let changed = false;
+  const updated = conversations.map((conversation) => {
+    if (conversation._id !== params.conversationId) {
+      return conversation;
+    }
+
+    const hasParticipant = conversation.participants.some(
+      (p) => p.userId === params.userId,
+    );
+    if (!hasParticipant) {
+      return conversation;
+    }
+
+    changed = true;
+    return {
+      ...conversation,
+      participants: conversation.participants.map((p) =>
+        p.userId === params.userId
+          ? { ...p, lastReadMessageId: params.lastReadMessageId }
+          : p,
+      ),
+    };
+  });
+
+  return changed ? updated : conversations;
+}
+
+/**
+ * Removes a participant from a cached group conversation and applies optional admin promotion.
+ */
+export function removeParticipantFromConversationInCache(
+  conversations: Conversation[] | undefined,
+  params: {
+    conversationId: string;
+    userId: string;
+    promotedAdminId?: string | null;
+  },
+): Conversation[] | undefined {
+  if (!conversations) {
+    return conversations;
+  }
+
+  let changed = false;
+  const updated = conversations.map((conversation) => {
+    if (conversation._id !== params.conversationId) {
+      return conversation;
+    }
+
+    changed = true;
+    const nextParticipants = conversation.participants
+      .filter((p) => p.userId !== params.userId)
+      .map((p) =>
+        params.promotedAdminId && p.userId === params.promotedAdminId
+          ? { ...p, role: "admin" as const }
+          : p,
+      );
+
+    return {
+      ...conversation,
+      participants: nextParticipants,
+    };
+  });
+
+  return changed ? updated : conversations;
+}
+
+/**
+ * Updates a participant's role inside a cached group conversation.
+ */
+export function updateParticipantRoleInCache(
+  conversations: Conversation[] | undefined,
+  params: {
+    conversationId: string;
+    userId: string;
+    role: ParticipantRole;
+  },
+): Conversation[] | undefined {
+  if (!conversations) {
+    return conversations;
+  }
+
+  let changed = false;
+  const updated = conversations.map((conversation) => {
+    if (conversation._id !== params.conversationId) {
+      return conversation;
+    }
+
+    const target = conversation.participants.find(
+      (p) => p.userId === params.userId,
+    );
+    if (!target || target.role === params.role) {
+      return conversation;
+    }
+
+    changed = true;
+    return {
+      ...conversation,
+      participants: conversation.participants.map((p) =>
+        p.userId === params.userId ? { ...p, role: params.role } : p,
+      ),
+    };
+  });
+
+  return changed ? updated : conversations;
 }
 
 /**

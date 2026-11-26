@@ -153,6 +153,36 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
     });
   });
 
+  describe("POST /api/users/batch", () => {
+    it("should return public profiles for valid userIds and reject invalid input", async () => {
+      const invalidRes = await fetch(`${baseUrl}/api/users/batch`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userA.token}`,
+        },
+        body: JSON.stringify({ userIds: ["not-an-object-id"] }),
+      });
+      expect(invalidRes.status).toBe(400);
+
+      const batchRes = await fetch(`${baseUrl}/api/users/batch`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userA.token}`,
+        },
+        body: JSON.stringify({ userIds: [userB.id, userC.id, userB.id] }),
+      });
+      expect(batchRes.status).toBe(200);
+      const batchBody = (await batchRes.json()) as {
+        users: Array<{ id: string; username: string; displayName: string }>;
+      };
+      expect(batchBody.users).toHaveLength(2);
+      expect(batchBody.users.map((u) => u.id)).toContain(userB.id);
+      expect(batchBody.users.map((u) => u.id)).toContain(userC.id);
+    });
+  });
+
   describe("GET /api/conversations", () => {
     it("should return 401 Unauthorized if no auth token is provided", async () => {
       const res = await fetch(`${baseUrl}/api/conversations`);

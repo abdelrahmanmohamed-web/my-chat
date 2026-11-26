@@ -5,7 +5,10 @@ import {
 } from "@tanstack/react-query";
 import { QUERY_KEYS } from "@/app/query-client";
 import { useRealtimeSocket } from "@/features/connection";
-import { updateConversationLastMessageInCache } from "@/features/conversations";
+import {
+  updateConversationLastMessageInCache,
+  updateConversationParticipantReadInCache,
+} from "@/features/conversations";
 import { listMessages, toApiError } from "@/lib/api";
 import {
   markMessageReadWithResilience,
@@ -17,7 +20,6 @@ import type { Conversation } from "@/types/conversations";
 import type { Message } from "@/types/messages";
 import { MESSAGE_LIMITS } from "@/types/messages";
 import {
-  applyReadUpdateToCache,
   createOptimisticMessage,
   insertOptimisticMessage,
   markOptimisticMessageFailed,
@@ -206,10 +208,11 @@ export function useMarkMessageReadMutation(conversationId: string) {
         return;
       }
 
-      queryClient.setQueryData<ChatMessagesInfiniteData>(
-        QUERY_KEYS.messages(conversationId),
+      queryClient.setQueryData<Conversation[]>(
+        QUERY_KEYS.conversations,
         (current) =>
-          applyReadUpdateToCache(current, {
+          updateConversationParticipantReadInCache(current, {
+            conversationId,
             userId: currentUserId,
             lastReadMessageId: messageId,
           }),

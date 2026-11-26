@@ -1,5 +1,9 @@
 import type { PublicUser, SanitizedSession } from "@/types/auth";
-import type { Conversation, UserSearchResult } from "@/types/conversations";
+import type {
+  Conversation,
+  PublicUserProfile,
+  UserSearchResult,
+} from "@/types/conversations";
 import type { Message } from "@/types/messages";
 
 export const TEST_USER: PublicUser = {
@@ -11,8 +15,10 @@ export const TEST_USER: PublicUser = {
 };
 
 export const TEST_OTHER_USER_ID = "65f1a9c2e4b0a1b2c3d4e502";
+export const TEST_THIRD_USER_ID = "65f1a9c2e4b0a1b2c3d4e503";
 export const TEST_CONVERSATION_ID = "65f1a9c2e4b0a1b2c3d4e601";
 export const TEST_SECOND_CONVERSATION_ID = "65f1a9c2e4b0a1b2c3d4e602";
+export const TEST_GROUP_CONVERSATION_ID = "65f1a9c2e4b0a1b2c3d4e603";
 
 export const TEST_ACCESS_TOKEN = "test-access-token-initial";
 export const TEST_REFRESHED_TOKEN = "test-access-token-refreshed";
@@ -50,8 +56,32 @@ export const TEST_SEARCH_USERS: UserSearchResult[] = [
     status: "online",
   },
   {
-    id: "65f1a9c2e4b0a1b2c3d4e503",
+    id: TEST_THIRD_USER_ID,
     email: "omar@example.com",
+    username: "omar_dev",
+    displayName: "عمر خالد",
+    avatarUrl: null,
+    status: "offline",
+  },
+];
+
+export const TEST_PUBLIC_PROFILES: PublicUserProfile[] = [
+  {
+    id: TEST_USER.id,
+    username: TEST_USER.username,
+    displayName: TEST_USER.displayName,
+    avatarUrl: TEST_USER.avatarUrl ?? null,
+    status: "online",
+  },
+  {
+    id: TEST_OTHER_USER_ID,
+    username: "سارة_علي",
+    displayName: "سارة علي",
+    avatarUrl: null,
+    status: "online",
+  },
+  {
+    id: TEST_THIRD_USER_ID,
     username: "omar_dev",
     displayName: "عمر خالد",
     avatarUrl: null,
@@ -63,7 +93,20 @@ export const TEST_CONVERSATIONS: Conversation[] = [
   {
     _id: TEST_CONVERSATION_ID,
     type: "direct",
-    participantIds: [TEST_USER.id, TEST_OTHER_USER_ID],
+    participants: [
+      {
+        userId: TEST_USER.id,
+        role: "member",
+        joinedAt: "2026-11-12T10:00:00.000Z",
+        lastReadMessageId: null,
+      },
+      {
+        userId: TEST_OTHER_USER_ID,
+        role: "member",
+        joinedAt: "2026-11-12T10:00:00.000Z",
+        lastReadMessageId: "65f1a9c2e4b0a1b2c3d4e701",
+      },
+    ],
     hiddenFor: [],
     name: "سارة علي",
     avatarUrl: null,
@@ -79,7 +122,20 @@ export const TEST_CONVERSATIONS: Conversation[] = [
   {
     _id: TEST_SECOND_CONVERSATION_ID,
     type: "direct",
-    participantIds: [TEST_USER.id, "65f1a9c2e4b0a1b2c3d4e503"],
+    participants: [
+      {
+        userId: TEST_USER.id,
+        role: "member",
+        joinedAt: "2026-11-11T15:00:00.000Z",
+        lastReadMessageId: null,
+      },
+      {
+        userId: TEST_THIRD_USER_ID,
+        role: "member",
+        joinedAt: "2026-11-11T15:00:00.000Z",
+        lastReadMessageId: null,
+      },
+    ],
     hiddenFor: [],
     name: "عمر خالد",
     avatarUrl: null,
@@ -94,14 +150,46 @@ export const TEST_CONVERSATIONS: Conversation[] = [
   },
 ];
 
+export const TEST_GROUP_CONVERSATION: Conversation = {
+  _id: TEST_GROUP_CONVERSATION_ID,
+  type: "group",
+  createdBy: TEST_USER.id,
+  participants: [
+    {
+      userId: TEST_USER.id,
+      role: "admin",
+      joinedAt: "2026-11-12T09:00:00.000Z",
+      lastReadMessageId: null,
+    },
+    {
+      userId: TEST_OTHER_USER_ID,
+      role: "member",
+      joinedAt: "2026-11-12T09:00:00.000Z",
+      lastReadMessageId: null,
+    },
+    {
+      userId: TEST_THIRD_USER_ID,
+      role: "member",
+      joinedAt: "2026-11-12T09:00:00.000Z",
+      lastReadMessageId: null,
+    },
+  ],
+  hiddenFor: [],
+  name: "فريق التطوير",
+  avatarUrl: null,
+  lastMessageAt: "2026-11-12T12:15:00.000Z",
+  createdAt: "2026-11-12T09:00:00.000Z",
+  updatedAt: "2026-11-12T12:15:00.000Z",
+};
+
 export const TEST_MESSAGES_NEWEST_FIRST: Message[] = [
   {
     _id: "65f1a9c2e4b0a1b2c3d4e702",
     conversationId: TEST_CONVERSATION_ID,
     senderId: TEST_OTHER_USER_ID,
+    type: "user",
     content: "أهلاً، هذا رابط المشروع https://example.com/docs!",
     clientId: null,
-    reads: [],
     expiresAt: null,
     createdAt: "2026-11-12T12:10:00.000Z",
     updatedAt: "2026-11-12T12:10:00.000Z",
@@ -110,14 +198,9 @@ export const TEST_MESSAGES_NEWEST_FIRST: Message[] = [
     _id: "65f1a9c2e4b0a1b2c3d4e701",
     conversationId: TEST_CONVERSATION_ID,
     senderId: TEST_USER.id,
+    type: "user",
     content: "السلام عليكم <script>alert(1)</script>",
     clientId: "client-initial-1",
-    reads: [
-      {
-        userId: TEST_OTHER_USER_ID,
-        lastReadMessageId: "65f1a9c2e4b0a1b2c3d4e701",
-      },
-    ],
     expiresAt: null,
     createdAt: "2026-11-12T12:05:00.000Z",
     updatedAt: "2026-11-12T12:05:00.000Z",

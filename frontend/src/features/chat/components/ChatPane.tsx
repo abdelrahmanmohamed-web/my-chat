@@ -5,12 +5,13 @@ import {
   EyeOffIcon,
   MoreVerticalIcon,
   PencilIcon,
+  UsersIcon,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { Virtuoso } from "react-virtuoso";
 import { cn } from "cn";
 import { QUERY_KEYS } from "@/app/query-client";
-import { ROUTES } from "@/app/routes";
+import { conversationPath, ROUTES } from "@/app/routes";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -28,8 +29,15 @@ import {
 import {
   ConversationAvatar,
   EditConversationDialog,
+  getCurrentUserLastReadId,
+  getOtherDirectParticipantId,
+  getOtherParticipantsLastReadIds,
+  getParticipantIds,
+  GroupDetailsDialog,
+  isConversationAdmin,
   useConversationsQuery,
   useHideConversationMutation,
+  useUsersBatchQuery,
 } from "@/features/conversations";
 import { toApiError } from "@/lib/api";
 import { isDifferentCalendarDay } from "@/lib/date";
@@ -56,6 +64,7 @@ interface ChatTimelineRow {
   message: ChatMessage;
   isOwn: boolean;
   isRead: boolean;
+  senderName: string | null;
   showDateSeparator: boolean;
   isGroupedWithPrevious: boolean;
 }
@@ -91,6 +100,10 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
   const queryClient = useQueryClient();
   const currentUserId = useAuthStore((state) => state.user?.id ?? "");
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [groupDetailsConvId, setGroupDetailsConvId] = useState<string | null>(
+    null,
+  );
+  const isGroupDetailsOpen = groupDetailsConvId === conversationId;
 
   useConversationRoom(conversationId);
 
@@ -102,11 +115,30 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
     [conversationsQuery.data, conversationId],
   );
 
-  const otherUserId = useMemo(() => {
-    return (
-      conversation?.participantIds?.find((id) => id !== currentUserId) ?? null
-    );
-  }, [conversation?.participantIds, currentUserId]);
+  const isGroup = conversation?.type === "group";
+  const isAdmin = isConversationAdmin(conversation, currentUserId);
+  const canEdit = !isGroup || isAdmin;
+
+  const otherUserId = useMemo(
+    () => getOtherDirectParticipantId(conversation, currentUserId),
+    [conversation, currentUserId],
+  );
+
+  const groupParticipantIds = useMemo(
+    () => (isGroup ? getParticipantIds(conversation) : []),
+    [isGroup, conversation],
+  );
+  const groupUsersQuery = useUsersBatchQuery(groupParticipantIds, {
+    enabled: isGroup && groupParticipantIds.length > 0,
+  });
+
+  const senderDisplayNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const user of groupUsersQuery.data ?? []) {
+      map.set(user.id, user.displayName);
+    }
+    return map;
+  }, [groupUsersQuery.data]);
 
   const isRestFallbackActive = useConnectionStore(
     (state) => state.isRestFallbackActive,
@@ -171,9 +203,14 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
 
   const firstItemIndex = Math.max(0, VIRTUOSO_START_INDEX - olderPagesCount);
 
+  const otherLastReadIds = useMemo(
+    () => getOtherParticipantsLastReadIds(conversation, currentUserId),
+    [conversation, currentUserId],
+  );
+
   const highestReadIndex = useMemo(
-    () => findHighestReadMessageIndex(chronologicalMessages, currentUserId),
-    [chronologicalMessages, currentUserId],
+    () => findHighestReadMessageIndex(chronologicalMessages, otherLastReadIds),
+    [chronologicalMessages, otherLastReadIds],
   );
 
   const timelineRows = useMemo<ChatTimelineRow[]>(() => {
@@ -198,16 +235,27 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
       const isConfirmed =
         message.localStatus !== "sending" && message.localStatus !== "failed";
       const isRead = isOwn && isConfirmed && index <= highestReadIndex;
+      const senderName =
+        isGroup && !isOwn
+          ? (senderDisplayNameById.get(message.senderId) ?? null)
+          : null;
 
       return {
         message,
         isOwn,
         isRead,
+        senderName,
         showDateSeparator,
         isGroupedWithPrevious,
       };
     });
-  }, [chronologicalMessages, currentUserId, highestReadIndex]);
+  }, [
+    chronologicalMessages,
+    currentUserId,
+    highestReadIndex,
+    isGroup,
+    senderDisplayNameById,
+  ]);
 
   const latestIncomingConfirmed = useMemo(() => {
     for (let i = chronologicalMessages.length - 1; i >= 0; i -= 1) {
@@ -223,6 +271,11 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
     return null;
   }, [chronologicalMessages, currentUserId]);
 
+  const currentUserLastReadId = useMemo(
+    () => getCurrentUserLastReadId(conversation, currentUserId),
+    [conversation, currentUserId],
+  );
+
   const { mutate: markReadMutate } = markReadMutation;
 
   const triggerMarkRead = useCallback(() => {
@@ -230,9 +283,24 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
       return;
     }
 
-    const alreadyReadInCache = latestIncomingConfirmed.reads.some(
-      (entry) => entry.userId === currentUserId,
-    );
+    let alreadyReadInCache = false;
+    if (currentUserLastReadId) {
+      if (currentUserLastReadId === latestIncomingConfirmed._id) {
+        alreadyReadInCache = true;
+      } else {
+        const lastReadIndex = chronologicalMessages.findIndex(
+          (msg) => msg._id === currentUserLastReadId,
+        );
+        const latestIncomingIndex = chronologicalMessages.findIndex(
+          (msg) => msg._id === latestIncomingConfirmed._id,
+        );
+        alreadyReadInCache =
+          lastReadIndex !== -1 &&
+          latestIncomingIndex !== -1 &&
+          lastReadIndex >= latestIncomingIndex;
+      }
+    }
+
     if (
       alreadyReadInCache ||
       markedMessageIdsRef.current.has(latestIncomingConfirmed._id)
@@ -251,7 +319,13 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
 
     markedMessageIdsRef.current.add(latestIncomingConfirmed._id);
     markReadMutate(latestIncomingConfirmed._id);
-  }, [currentUserId, latestIncomingConfirmed, markReadMutate]);
+  }, [
+    chronologicalMessages,
+    currentUserId,
+    currentUserLastReadId,
+    latestIncomingConfirmed,
+    markReadMutate,
+  ]);
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {
@@ -302,6 +376,39 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
 
   const headerTitle = conversation?.name?.trim() || "محادثة";
 
+  const headerIdentityContent = (
+    <>
+      <ConversationAvatar
+        name={headerTitle}
+        avatarUrl={conversation?.avatarUrl}
+      />
+
+      <div className="min-w-0 text-start">
+        <h1 className="truncate text-sm font-semibold text-foreground">
+          {headerTitle}
+        </h1>
+        {isGroup ? (
+          <p className="text-xs text-muted-foreground">
+            {conversation.participants.length} أعضاء
+          </p>
+        ) : (
+          !isRestFallbackActive &&
+          (otherPresence === "online" ? (
+            <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <span
+                className="size-1.5 rounded-full bg-emerald-500"
+                aria-hidden="true"
+              />
+              <span>متصل الآن</span>
+            </p>
+          ) : otherPresence === "offline" ? (
+            <p className="text-xs text-muted-foreground">غير متصل</p>
+          ) : null)
+        )}
+      </div>
+    </>
+  );
+
   return (
     <section
       aria-label={headerTitle}
@@ -320,28 +427,20 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
             <ArrowRightIcon aria-hidden="true" />
           </Link>
 
-          <ConversationAvatar
-            name={headerTitle}
-            avatarUrl={conversation?.avatarUrl}
-          />
-
-          <div className="min-w-0 text-start">
-            <h1 className="truncate text-sm font-semibold text-foreground">
-              {headerTitle}
-            </h1>
-            {!isRestFallbackActive &&
-              (otherPresence === "online" ? (
-                <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                  <span
-                    className="size-1.5 rounded-full bg-emerald-500"
-                    aria-hidden="true"
-                  />
-                  <span>متصل الآن</span>
-                </p>
-              ) : otherPresence === "offline" ? (
-                <p className="text-xs text-muted-foreground">غير متصل</p>
-              ) : null)}
-          </div>
+          {isGroup ? (
+            <button
+              type="button"
+              onClick={() => setGroupDetailsConvId(conversationId)}
+              aria-label={`تفاصيل المجموعة ${headerTitle}`}
+              className="flex min-w-0 items-center gap-2.5 rounded-lg p-1 -m-1 text-start transition-colors hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+            >
+              {headerIdentityContent}
+            </button>
+          ) : (
+            <div className="flex min-w-0 items-center gap-2.5">
+              {headerIdentityContent}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -362,10 +461,20 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
                 <MoreVerticalIcon aria-hidden="true" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem onClick={() => setIsEditOpen(true)}>
-                  <PencilIcon aria-hidden="true" />
-                  <span>تعديل الاسم</span>
-                </DropdownMenuItem>
+                {isGroup && (
+                  <DropdownMenuItem
+                    onClick={() => setGroupDetailsConvId(conversationId)}
+                  >
+                    <UsersIcon aria-hidden="true" />
+                    <span>تفاصيل المجموعة</span>
+                  </DropdownMenuItem>
+                )}
+                {canEdit && (
+                  <DropdownMenuItem onClick={() => setIsEditOpen(true)}>
+                    <PencilIcon aria-hidden="true" />
+                    <span>تعديل الاسم</span>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem variant="destructive" onClick={handleHide}>
                   <EyeOffIcon aria-hidden="true" />
                   <span>إخفاء المحادثة</span>
@@ -463,6 +572,7 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
                   message={row.message}
                   isOwn={row.isOwn}
                   isRead={row.isRead}
+                  senderName={row.senderName}
                   showDateSeparator={row.showDateSeparator}
                   isGroupedWithPrevious={row.isGroupedWithPrevious}
                   onRetry={handleRetry}
@@ -484,6 +594,21 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
       <EditConversationDialog
         conversation={isEditOpen ? conversation : null}
         onOpenChange={setIsEditOpen}
+      />
+
+      <GroupDetailsDialog
+        conversation={conversation}
+        currentUserId={currentUserId}
+        open={isGroupDetailsOpen}
+        onOpenChange={(open) =>
+          setGroupDetailsConvId(open ? conversationId : null)
+        }
+        onNavigateToConversation={(targetId) => {
+          void navigate(conversationPath(targetId));
+        }}
+        onGroupLeft={() => {
+          void navigate(ROUTES.home, { replace: true });
+        }}
       />
     </section>
   );

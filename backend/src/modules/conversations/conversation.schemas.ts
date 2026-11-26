@@ -69,3 +69,12 @@ export const userSearchQuerySchema = z.object({
 });
 
 export type UserSearchQuery = z.infer<typeof userSearchQuerySchema>;
+
+export const usersBatchSchema = z.object({
+  userIds: z
+    .array(z.string().trim().min(1))
+    .min(1, "At least one user ID is required")
+    .max(MAX_GROUP_PARTICIPANTS),
+});
+
+export type UsersBatchInput = z.infer<typeof usersBatchSchema>;

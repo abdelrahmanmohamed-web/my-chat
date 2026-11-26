@@ -7,6 +7,8 @@ export const QUERY_KEYS = {
   conversations: ["conversations"] as const,
   messages: (conversationId: string) => ["messages", conversationId] as const,
   userSearch: (query: string) => ["users", "search", query] as const,
+  usersBatch: (userIds: ReadonlyArray<string>) =>
+    ["users", "batch", ...userIds] as const,
 } as const;
 
 const MAX_TRANSIENT_RETRIES = 2;

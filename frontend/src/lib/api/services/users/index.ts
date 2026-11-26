@@ -1,1 +1,1 @@
-export { searchUsers } from "./users.service";
+export { getUsersBatch, searchUsers } from "./users.service";

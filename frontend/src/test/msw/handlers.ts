@@ -1,6 +1,7 @@
 import { http, HttpResponse } from "msw";
 import {
   TEST_ACCESS_TOKEN,
+  TEST_PUBLIC_PROFILES,
   TEST_REFRESHED_TOKEN,
   TEST_SESSIONS,
   TEST_USER,
@@ -58,6 +59,14 @@ export const authHandlers = [
 
   http.get("*/api/users/search", () => {
     return HttpResponse.json({ users: [] });
+  }),
+
+  http.post("*/api/users/batch", async ({ request }) => {
+    const body = (await request.json()) as { userIds?: string[] };
+    const idSet = new Set(body.userIds ?? []);
+    return HttpResponse.json({
+      users: TEST_PUBLIC_PROFILES.filter((u) => idSet.has(u.id)),
+    });
   }),
 
   http.get("*/api/conversations", () => {

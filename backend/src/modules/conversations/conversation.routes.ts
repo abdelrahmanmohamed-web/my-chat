@@ -28,12 +28,14 @@ import {
   conversationUpdateSchema,
   createConversationSchema,
   updateParticipantRoleSchema,
+  usersBatchSchema,
   userSearchQuerySchema,
 } from "./conversation.schemas.ts";
 import {
   addGroupParticipants,
   createGroupConversation,
   createOrRestoreDirectConversation,
+  getUsersByIds,
   hideConversation,
   leaveGroupConversation,
   listVisibleConversations,
@@ -88,6 +90,23 @@ userSearchRouter.get("/search", async (req, res) => {
 
   const users = await searchUsers(req.user!.id, parsed.data);
   return res.json({ users });
+});
+
+/**
+ * Fetches sanitized public profiles for a batch of user IDs (e.g. group members).
+ */
+userSearchRouter.post("/batch", async (req, res) => {
+  const parsed = usersBatchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid user IDs payload" });
+  }
+
+  const result = await getUsersByIds(parsed.data.userIds);
+  if (result.kind === "invalid") {
+    return res.status(400).json({ error: "Invalid user IDs payload" });
+  }
+
+  return res.json({ users: result.users });
 });
 
 // ============================================================================

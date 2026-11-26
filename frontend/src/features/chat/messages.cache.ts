@@ -1,5 +1,5 @@
 import type { InfiniteData } from "@tanstack/react-query";
-import type { ChatMessage, Message, MessageRead } from "@/types/messages";
+import type { ChatMessage, Message } from "@/types/messages";
 
 export interface ChatMessagesPage {
   messages: ChatMessage[];
@@ -36,9 +36,9 @@ export function createOptimisticMessage(params: {
     _id: params.clientId,
     conversationId: params.conversationId,
     senderId: params.senderId,
+    type: "user",
     content: params.content,
     clientId: params.clientId,
-    reads: [],
     expiresAt: null,
     createdAt: nowIso,
     updatedAt: nowIso,
@@ -237,44 +237,6 @@ export function upsertMessageInCache(
 }
 
 /**
- * Updates read receipt metadata on the specified message in cache.
- */
-export function applyReadUpdateToCache(
-  data: ChatMessagesInfiniteData | undefined,
-  receipt: { userId: string; lastReadMessageId: string },
-): ChatMessagesInfiniteData | undefined {
-  if (!data) {
-    return data;
-  }
-
-  let matched = false;
-  const pages = data.pages.map((page) => ({
-    ...page,
-    messages: page.messages.map((item) => {
-      if (item._id !== receipt.lastReadMessageId) {
-        return item;
-      }
-      matched = true;
-      const filteredReads: MessageRead[] = item.reads.filter(
-        (entry) => entry.userId !== receipt.userId,
-      );
-      return {
-        ...item,
-        reads: [
-          ...filteredReads,
-          {
-            userId: receipt.userId,
-            lastReadMessageId: receipt.lastReadMessageId,
-          },
-        ],
-      };
-    }),
-  }));
-
-  return matched ? { ...data, pages } : data;
-}
-
-/**
  * Converts newest-first server pages into chronological oldest-first messages
  * while deduplicating entries across page boundaries or live inserts.
  */
@@ -306,31 +268,23 @@ export function flattenMessagesPages(
 }
 
 /**
- * Determines the highest chronological message index read by another participant.
+ * Determines the highest chronological message index read by another participant
+ * based on conversation participant `lastReadMessageId` pointers.
  * Uses list position rather than ObjectId lexical comparison.
  */
 export function findHighestReadMessageIndex(
   chronologicalMessages: ReadonlyArray<ChatMessage>,
-  currentUserId: string,
-  externalLastReadMessageIds?: ReadonlyArray<string>,
+  otherLastReadMessageIds: ReadonlyArray<string>,
 ): number {
-  const readTargetIds = new Set<string>(externalLastReadMessageIds ?? []);
-
-  for (const msg of chronologicalMessages) {
-    for (const entry of msg.reads) {
-      if (entry.userId !== currentUserId) {
-        readTargetIds.add(entry.lastReadMessageId);
-      }
-    }
+  if (otherLastReadMessageIds.length === 0) {
+    return -1;
   }
 
+  const readTargetIds = new Set<string>(otherLastReadMessageIds);
   let highestIndex = -1;
+
   for (let i = 0; i < chronologicalMessages.length; i += 1) {
-    const msg = chronologicalMessages[i];
-    const hasOtherReader = msg.reads.some(
-      (entry) => entry.userId !== currentUserId,
-    );
-    if (hasOtherReader || readTargetIds.has(msg._id)) {
+    if (readTargetIds.has(chronologicalMessages[i]._id)) {
       highestIndex = i;
     }
   }

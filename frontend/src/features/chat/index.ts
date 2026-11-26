@@ -7,7 +7,6 @@ export { MessageItem } from "./components/MessageItem";
 export { MessageStatusIcon } from "./components/MessageStatusIcon";
 export { TypingIndicator } from "./components/TypingIndicator";
 export {
-  applyReadUpdateToCache,
   createOptimisticMessage,
   findHighestReadMessageIndex,
   flattenMessagesPages,

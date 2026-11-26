@@ -40,6 +40,11 @@ function EditConversationForm({
     event.preventDefault();
 
     const trimmed = nameInput.trim();
+    if (conversation.type === "group" && trimmed.length === 0) {
+      setNameError("اسم المجموعة لا يمكن أن يكون فارغاً");
+      return;
+    }
+
     const parsed = conversationUpdateSchema.safeParse({
       name: trimmed.length > 0 ? trimmed : null,
     });
@@ -111,14 +116,19 @@ export function EditConversationDialog({
   conversation,
   onOpenChange,
 }: EditConversationDialogProps) {
+  const isGroup = conversation?.type === "group";
+
   return (
     <Dialog open={conversation !== null} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader className="text-start">
-          <DialogTitle>تعديل اسم المحادثة</DialogTitle>
+          <DialogTitle>
+            {isGroup ? "تعديل اسم المجموعة" : "تعديل اسم المحادثة"}
+          </DialogTitle>
           <DialogDescription>
-            عيّن اسماً مخصصاً لهذه المحادثة، أو اتركه فارغاً لاستخدام اسم الطرف
-            الآخر تلقائياً.
+            {isGroup
+              ? "أدخل اسماً جديداً للمجموعة."
+              : "عيّن اسماً مخصصاً لهذه المحادثة، أو اتركه فارغاً لاستخدام اسم الطرف الآخر تلقائياً."}
           </DialogDescription>
         </DialogHeader>
 
