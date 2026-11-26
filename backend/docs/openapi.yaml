@@ -363,6 +363,91 @@ paths:
           "$ref": "#/components/responses/TooManyRequests"
         "500":
           "$ref": "#/components/responses/InternalServerError"
+  "/api/auth/me/avatar":
+    put:
+      tags:
+        - Auth
+      operationId: uploadUserAvatar
+      summary: Upload or replace personal avatar
+      description: "Accepts raw image binary data (`image/png`, `image/jpeg`, `image/webp`, `image/gif`, up to 2 MB), verifies image magic bytes, stores it as a data URL on the user profile, and returns the updated public user."
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        description: "Raw avatar image binary payload (max 2 MB)."
+        content:
+          "image/png":
+            schema:
+              type: string
+              format: binary
+          "image/jpeg":
+            schema:
+              type: string
+              format: binary
+          "image/webp":
+            schema:
+              type: string
+              format: binary
+          "image/gif":
+            schema:
+              type: string
+              format: binary
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Updated authenticated user profile.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/UserResponse"
+        "400":
+          description: "Missing, unsupported, or corrupted image payload."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              examples:
+                invalidAvatar:
+                  value:
+                    error: Invalid avatar image
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "413":
+          "$ref": "#/components/responses/PayloadTooLarge"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+    delete:
+      tags:
+        - Auth
+      operationId: removeUserAvatar
+      summary: Remove personal avatar
+      description: "Clears `avatarUrl` on the authenticated user's profile and returns the updated public user."
+      security:
+        - bearerAuth: []
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Updated authenticated user profile with null avatarUrl.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/UserResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
   "/api/auth/change-password":
     post:
       tags:

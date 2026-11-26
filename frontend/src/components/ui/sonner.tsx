@@ -1,6 +1,4 @@
-"use client";
-
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/theme-context";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 import {
   CircleCheckIcon,

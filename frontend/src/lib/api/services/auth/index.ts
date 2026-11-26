@@ -5,6 +5,8 @@ export {
   logoutUser,
   refreshAccessToken,
   registerUser,
+  removeUserAvatar,
+  uploadUserAvatar,
 } from "./auth.service";
 export {
   listSessions,

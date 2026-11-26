@@ -175,7 +175,11 @@ conversationRouter.post("/", async (req, res) => {
             conversation: result.conversation,
           });
         } else {
-          const copy = { ...baseObject, name: null as string | null };
+          const copy = {
+            ...baseObject,
+            name: null as string | null,
+            avatarUrl: null as string | null,
+          };
           await populateAutomaticConversationNames([copy], pId);
           io.to(`user:${pId}`).emit("conversation:created", {
             conversation: copy,

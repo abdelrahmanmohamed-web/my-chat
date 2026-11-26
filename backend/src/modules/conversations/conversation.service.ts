@@ -54,18 +54,19 @@ export function directConversationKey(
 }
 
 /**
- * Represents the minimal shape of a conversation document required to resolve automatic names.
+ * Represents the minimal shape of a conversation document required to resolve automatic names and avatars.
  */
 interface ConversationDocLike {
   type?: string;
   name?: string | null;
+  avatarUrl?: string | null;
   participants?: Array<{ userId: Types.ObjectId | string }>;
 }
 
 /**
- * Resolves and attaches the automatic conversation name for direct conversations.
- * If a conversation does not have a custom name set, its name defaults to the
- * display name of the counterpart participant relative to the requesting user.
+ * Resolves and attaches the automatic conversation name and avatar for direct conversations.
+ * If a conversation does not have a custom name or avatar set, they default to the
+ * display name and avatar of the counterpart participant relative to the requesting user.
  *
  * @param conversations Array of conversation documents or plain objects
  * @param userId Authenticated user requesting the conversations
@@ -80,7 +81,7 @@ export async function populateAutomaticConversationNames(
   const counterpartIdSet = new Set<string>();
 
   for (const conv of conversations) {
-    if (!conv.name && conv.type === "direct") {
+    if (conv.type === "direct" && (!conv.name || !conv.avatarUrl)) {
       const counterpartId = getParticipantIds(conv).find(
         (id) => id !== currentUserIdStr,
       );
@@ -95,23 +96,34 @@ export async function populateAutomaticConversationNames(
   const users = await User.find({
     _id: { $in: Array.from(counterpartIdSet) },
   })
-    .select("_id displayName")
+    .select("_id displayName avatarUrl")
     .lean();
 
-  const userMap = new Map<string, string>();
+  const userMap = new Map<
+    string,
+    { displayName: string; avatarUrl: string | null }
+  >();
   for (const user of users) {
-    userMap.set(user._id.toString(), user.displayName);
+    userMap.set(user._id.toString(), {
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl ?? null,
+    });
   }
 
   for (const conv of conversations) {
-    if (!conv.name && conv.type === "direct") {
+    if (conv.type === "direct" && (!conv.name || !conv.avatarUrl)) {
       const counterpartId = getParticipantIds(conv).find(
         (id) => id !== currentUserIdStr,
       );
       if (counterpartId) {
-        const displayName = userMap.get(counterpartId);
-        if (displayName) {
-          conv.name = displayName;
+        const counterpart = userMap.get(counterpartId);
+        if (counterpart) {
+          if (!conv.name) {
+            conv.name = counterpart.displayName;
+          }
+          if (!conv.avatarUrl && counterpart.avatarUrl) {
+            conv.avatarUrl = counterpart.avatarUrl;
+          }
         }
       }
     }
@@ -278,7 +290,7 @@ export async function createOrRestoreDirectConversation(
 
   // Ensure the target participant actually exists in the database
   const otherUser = await User.findById(otherObjectId)
-    .select("displayName")
+    .select("displayName avatarUrl")
     .lean();
   if (!otherUser) return { kind: "not_found" as const };
 
@@ -318,9 +330,14 @@ export async function createOrRestoreDirectConversation(
     await conversation.save();
   }
 
-  // Populate automatic name with counterpart's display name if no custom name is set
-  if (!conversation.name && conversation.type === "direct") {
-    conversation.name = otherUser.displayName;
+  // Populate automatic name and avatar with counterpart's profile if no custom values are set
+  if (conversation.type === "direct") {
+    if (!conversation.name) {
+      conversation.name = otherUser.displayName;
+    }
+    if (!conversation.avatarUrl && otherUser.avatarUrl) {
+      conversation.avatarUrl = otherUser.avatarUrl;
+    }
   }
 
   return { kind: "ok" as const, conversation, created };

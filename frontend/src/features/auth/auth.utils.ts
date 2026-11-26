@@ -37,6 +37,9 @@ const KNOWN_AUTH_ERROR_MAP: Record<string, string> = {
   "Invalid session name": "اسم الجلسة غير صالح. أدخل اسماً لا يتجاوز 100 حرف.",
   "Session not found":
     "الجلسة غير موجودة أو تم إنهاؤها بالفعل. حدّث قائمة الجلسات.",
+  "Invalid avatar image":
+    "ملف الصورة غير صالح. اختر صورة بصيغة PNG أو JPG أو WebP أو GIF.",
+  "Payload too large": "حجم الصورة يتجاوز الحد الأقصى المسموح به (2 ميجابايت).",
 };
 
 /**

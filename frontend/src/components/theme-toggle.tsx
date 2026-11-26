@@ -1,5 +1,5 @@
 import { MoonIcon, SunIcon, SunMoonIcon } from "lucide-react";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/theme-context";
 import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,

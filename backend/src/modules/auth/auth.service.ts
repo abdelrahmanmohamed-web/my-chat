@@ -221,6 +221,22 @@ export async function getUserProfile(userId: string) {
 }
 
 /**
+ * Updates or clears the authenticated user's avatar URL.
+ */
+export async function updateUserAvatar(
+  userId: string,
+  avatarUrl: string | null,
+) {
+  const user = await User.findByIdAndUpdate(
+    userId,
+    { $set: { avatarUrl } },
+    { returnDocument: "after" },
+  ).select("email username displayName avatarUrl maxSessions");
+
+  return user ? toPublicUser(user) : null;
+}
+
+/**
  * Changes a user password and revokes all other active sessions for security.
  */
 export async function changePassword(

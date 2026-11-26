@@ -37,6 +37,24 @@ export const authHandlers = [
     return HttpResponse.json({ user: TEST_USER });
   }),
 
+  http.put("*/api/auth/me/avatar", () => {
+    return HttpResponse.json({
+      user: {
+        ...TEST_USER,
+        avatarUrl: "data:image/png;base64,iVBORw0KGgo=",
+      },
+    });
+  }),
+
+  http.delete("*/api/auth/me/avatar", () => {
+    return HttpResponse.json({
+      user: {
+        ...TEST_USER,
+        avatarUrl: null,
+      },
+    });
+  }),
+
   http.post("*/api/auth/change-password", () => {
     return HttpResponse.json({ success: true });
   }),

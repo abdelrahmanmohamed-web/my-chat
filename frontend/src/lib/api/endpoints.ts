@@ -4,6 +4,7 @@ export const AUTH_ENDPOINTS = {
   refresh: "/api/auth/refresh",
   logout: "/api/auth/logout",
   me: "/api/auth/me",
+  avatar: "/api/auth/me/avatar",
   changePassword: "/api/auth/change-password",
 } as const;
 

@@ -10,9 +10,11 @@ import {
   loginUser,
   logoutUser,
   registerUser,
+  removeUserAvatar,
   revokeAllSessions,
   revokeSession,
   updateSessionName,
+  uploadUserAvatar,
 } from "@/lib/api";
 import { useAuthStore, useOutboxStore } from "@/stores";
 import type {
@@ -144,6 +146,35 @@ export function useChangePasswordMutation() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sessions });
       toast.success("تم تغيير كلمة المرور وإنهاء جميع الجلسات الأخرى.");
+    },
+  });
+}
+
+export function useUploadAvatarMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ blob, mimeType }: { blob: Blob; mimeType: string }) =>
+      uploadUserAvatar(blob, mimeType),
+    onSuccess: (data) => {
+      queryClient.setQueryData(QUERY_KEYS.me, data.user);
+      useAuthStore.getState().setUser(data.user);
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.conversations });
+      toast.success("تم تحديث الصورة الشخصية.");
+    },
+  });
+}
+
+export function useRemoveAvatarMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => removeUserAvatar(),
+    onSuccess: (data) => {
+      queryClient.setQueryData(QUERY_KEYS.me, data.user);
+      useAuthStore.getState().setUser(data.user);
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.conversations });
+      toast.success("تمت إزالة الصورة الشخصية.");
     },
   });
 }

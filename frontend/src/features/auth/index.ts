@@ -7,8 +7,10 @@ export {
   useLoginMutation,
   useLogoutMutation,
   useRegisterMutation,
+  useRemoveAvatarMutation,
   useRenameSessionMutation,
   useRevokeOtherSessionsMutation,
   useRevokeSessionMutation,
   useSessionsQuery,
+  useUploadAvatarMutation,
 } from "./use-auth-mutations";

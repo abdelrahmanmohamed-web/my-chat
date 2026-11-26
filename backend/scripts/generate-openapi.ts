@@ -73,6 +73,7 @@ interface RequestBodyMetadata {
   description: string;
   schemaRef?: string;
   schema?: JsonObject;
+  content?: Record<string, JsonObject>;
 }
 
 interface EndpointMetadata {
@@ -1181,6 +1182,64 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     },
   },
 
+  "PUT /api/auth/me/avatar": {
+    operationId: "uploadUserAvatar",
+    tags: ["Auth"],
+    summary: "Upload or replace personal avatar",
+    description:
+      "Accepts raw image binary data (`image/png`, `image/jpeg`, `image/webp`, `image/gif`, up to 2 MB), verifies image magic bytes, stores it as a data URL on the user profile, and returns the updated public user.",
+    requestBody: {
+      required: true,
+      description: "Raw avatar image binary payload (max 2 MB).",
+      content: {
+        "image/png": { schema: { type: "string", format: "binary" } },
+        "image/jpeg": { schema: { type: "string", format: "binary" } },
+        "image/webp": { schema: { type: "string", format: "binary" } },
+        "image/gif": { schema: { type: "string", format: "binary" } },
+      },
+    },
+    responses: {
+      "200": {
+        description: "Updated authenticated user profile.",
+        content: jsonBodyRef("UserResponse"),
+      },
+      "400": {
+        description: "Missing, unsupported, or corrupted image payload.",
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/ErrorResponse" },
+            examples: {
+              invalidAvatar: {
+                value: { error: "Invalid avatar image" },
+              },
+            },
+          },
+        },
+      },
+      "401": { $ref: "#/components/responses/Unauthorized" },
+      "413": { $ref: "#/components/responses/PayloadTooLarge" },
+      "429": { $ref: "#/components/responses/TooManyRequests" },
+      "500": { $ref: "#/components/responses/InternalServerError" },
+    },
+  },
+
+  "DELETE /api/auth/me/avatar": {
+    operationId: "removeUserAvatar",
+    tags: ["Auth"],
+    summary: "Remove personal avatar",
+    description:
+      "Clears `avatarUrl` on the authenticated user's profile and returns the updated public user.",
+    responses: {
+      "200": {
+        description: "Updated authenticated user profile with null avatarUrl.",
+        content: jsonBodyRef("UserResponse"),
+      },
+      "401": { $ref: "#/components/responses/Unauthorized" },
+      "429": { $ref: "#/components/responses/TooManyRequests" },
+      "500": { $ref: "#/components/responses/InternalServerError" },
+    },
+  },
+
   "POST /api/auth/change-password": {
     operationId: "changePassword",
     tags: ["Auth"],
@@ -2030,18 +2089,26 @@ function buildOperation(
   }
 
   if (meta.requestBody) {
-    const contentSchema = meta.requestBody.schemaRef
-      ? { $ref: `#/components/schemas/${meta.requestBody.schemaRef}` }
-      : meta.requestBody.schema;
-    operation.requestBody = {
-      required: meta.requestBody.required,
-      description: meta.requestBody.description,
-      content: {
-        "application/json": {
-          schema: contentSchema,
+    if (meta.requestBody.content) {
+      operation.requestBody = {
+        required: meta.requestBody.required,
+        description: meta.requestBody.description,
+        content: meta.requestBody.content,
+      };
+    } else {
+      const contentSchema = meta.requestBody.schemaRef
+        ? { $ref: `#/components/schemas/${meta.requestBody.schemaRef}` }
+        : meta.requestBody.schema;
+      operation.requestBody = {
+        required: meta.requestBody.required,
+        description: meta.requestBody.description,
+        content: {
+          "application/json": {
+            schema: contentSchema,
+          },
         },
-      },
-    };
+      };
+    }
   }
 
   if (route.rateLimiters.length > 0) {

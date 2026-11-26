@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/stores";
 import {
   TEST_ACCESS_TOKEN,
@@ -283,5 +283,89 @@ describe("Phase 1 auth flows", () => {
     expect(await screen.findByText("تسجيل الدخول")).toBeInTheDocument();
     expect(useAuthStore.getState().status).toBe("unauthenticated");
     expect(router.state.location.pathname).toBe("/login");
+  });
+
+  it("uploads and removes personal avatar in settings and rejects unsupported files", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    try {
+      let uploadCount = 0;
+      let removeCount = 0;
+
+      mswServer.use(
+        http.put("*/api/auth/me/avatar", () => {
+          uploadCount += 1;
+          return HttpResponse.json({
+            user: {
+              ...TEST_USER,
+              avatarUrl: "data:image/png;base64,iVBORw0KGgo=",
+            },
+          });
+        }),
+        http.delete("*/api/auth/me/avatar", () => {
+          removeCount += 1;
+          return HttpResponse.json({
+            user: {
+              ...TEST_USER,
+              avatarUrl: null,
+            },
+          });
+        }),
+      );
+
+      renderAppAt("/settings/security");
+
+      expect(await screen.findByText("الصورة الشخصية")).toBeInTheDocument();
+
+      const fileInput = screen.getByLabelText(
+        "اختيار صورة شخصية",
+      ) as HTMLInputElement;
+
+      // Unsupported MIME type shows validation error without hitting the server
+      const invalidFile = new File(["<svg/>"], "avatar.svg", {
+        type: "image/svg+xml",
+      });
+      fireEvent.change(fileInput, { target: { files: [invalidFile] } });
+      expect(await screen.findByText(/صيغة الملف غير مدعومة/)).toBeInTheDocument();
+      expect(uploadCount).toBe(0);
+
+      // Valid PNG uploads and updates user avatarUrl
+      const validFile = new File(
+        [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+        "avatar.png",
+        { type: "image/png" },
+      );
+      fireEvent.change(fileInput, { target: { files: [validFile] } });
+
+      await waitFor(() => {
+        expect(uploadCount).toBe(1);
+        expect(useAuthStore.getState().user?.avatarUrl).toBe(
+          "data:image/png;base64,iVBORw0KGgo=",
+        );
+      });
+
+      const removeButton = await screen.findByRole("button", {
+        name: "إزالة الصورة",
+      });
+      fireEvent.click(removeButton);
+
+      await waitFor(() => {
+        expect(removeCount).toBe(1);
+        expect(useAuthStore.getState().user?.avatarUrl).toBeNull();
+      });
+
+      const scriptWarnings = consoleErrorSpy.mock.calls.filter((args) =>
+        args.some(
+          (arg) =>
+            typeof arg === "string" &&
+            arg.includes("Encountered a script tag while rendering React component"),
+        ),
+      );
+      expect(scriptWarnings).toHaveLength(0);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 });

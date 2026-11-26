@@ -41,6 +41,27 @@ export async function getCurrentUser(): Promise<UserResponse> {
   return data;
 }
 
+export async function uploadUserAvatar(
+  file: Blob,
+  mimeType?: string,
+): Promise<UserResponse> {
+  const { data } = await httpClient.put<UserResponse>(
+    AUTH_ENDPOINTS.avatar,
+    file,
+    {
+      headers: {
+        "Content-Type": mimeType || file.type || "application/octet-stream",
+      },
+    },
+  );
+  return data;
+}
+
+export async function removeUserAvatar(): Promise<UserResponse> {
+  const { data } = await httpClient.delete<UserResponse>(AUTH_ENDPOINTS.avatar);
+  return data;
+}
+
 export async function changePassword(
   payload: ChangePasswordRequest,
 ): Promise<void> {

@@ -22,6 +22,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useAuthStore } from "@/stores";
 import { mapAuthApiErrorMessage } from "../auth.utils";
 import { ChangePasswordCard } from "../components/ChangePasswordCard";
+import { ProfileAvatarCard } from "../components/ProfileAvatarCard";
 import { SessionCard } from "../components/SessionCard";
 import {
   useLogoutMutation,
@@ -83,6 +84,8 @@ export function SecuritySettingsPage() {
       </header>
 
       <main className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
+        <ProfileAvatarCard />
+
         <Card>
           <CardHeader className="text-start">
             <div className="flex items-center gap-2">

@@ -809,5 +809,36 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
       );
       expect(leaveB.status).toBe(204);
     });
+
+    it("populates counterpart avatarUrl on direct conversations", async () => {
+      const avatarUrl = "data:image/png;base64,iVBORw0KGgo=";
+      await User.findByIdAndUpdate(userB.id, { $set: { avatarUrl } });
+
+      const createRes = await fetch(`${baseUrl}/api/conversations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userA.token}`,
+        },
+        body: JSON.stringify({
+          type: "direct",
+          participantId: userB.id,
+        }),
+      });
+      expect(createRes.status).toBe(201);
+      const createBody = (await createRes.json()) as {
+        conversation: { avatarUrl: string | null };
+      };
+      expect(createBody.conversation.avatarUrl).toBe(avatarUrl);
+
+      const listRes = await fetch(`${baseUrl}/api/conversations`, {
+        headers: { Authorization: `Bearer ${userA.token}` },
+      });
+      expect(listRes.status).toBe(200);
+      const listBody = (await listRes.json()) as {
+        conversations: Array<{ avatarUrl: string | null }>;
+      };
+      expect(listBody.conversations[0].avatarUrl).toBe(avatarUrl);
+    });
   });
 });

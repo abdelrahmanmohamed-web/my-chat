@@ -21,9 +21,11 @@ export {
   logoutUser,
   refreshAccessToken,
   registerUser,
+  removeUserAvatar,
   revokeAllSessions,
   revokeSession,
   updateSessionName,
+  uploadUserAvatar,
 } from "./services/auth";
 export {
   addGroupParticipants,

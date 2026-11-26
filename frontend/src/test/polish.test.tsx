@@ -361,4 +361,34 @@ describe("Phase 5 polish, typing, presence, unread & theme", () => {
       false,
     );
   });
+
+  it("renders theme provider without React script-tag warnings and persists dark/light class", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    try {
+      localStorage.setItem("theme", "dark");
+      registerBaseChatHandlers();
+      renderAppAt(`/conversations/${TEST_CONVERSATION_ID}`);
+
+      await screen.findByText(/السلام عليكم/);
+
+      await waitFor(() => {
+        expect(document.documentElement.classList.contains("dark")).toBe(true);
+      });
+
+      const scriptWarnings = consoleErrorSpy.mock.calls.filter((args) =>
+        args.some(
+          (arg) =>
+            typeof arg === "string" &&
+            arg.includes("Encountered a script tag while rendering React component"),
+        ),
+      );
+      expect(scriptWarnings).toHaveLength(0);
+    } finally {
+      document.documentElement.classList.remove("dark");
+      consoleErrorSpy.mockRestore();
+    }
+  });
 });
