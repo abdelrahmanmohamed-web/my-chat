@@ -6,6 +6,7 @@ import { socket } from "@/lib/socket";
 import {
   useAuthStore,
   useConnectionStore,
+  useDraftStore,
   useOutboxStore,
   usePresenceStore,
   useTypingStore,
@@ -39,6 +40,7 @@ afterEach(() => {
   cleanup();
   socket.disconnect();
   queryClient.clear();
+  useDraftStore.getState().clearDrafts();
   useOutboxStore.getState().clearOutbox();
   usePresenceStore.getState().clearPresence();
   useTypingStore.getState().clearAllTyping();

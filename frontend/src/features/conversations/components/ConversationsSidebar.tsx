@@ -24,7 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useLogoutMutation } from "@/features/auth";
 import { ConnectionStatusIndicator } from "@/features/connection";
 import { toApiError } from "@/lib/api";
-import { useAuthStore } from "@/stores";
+import { useAuthStore, useDraftStore, useOutboxStore } from "@/stores";
 import type { Conversation } from "@/types/conversations";
 import {
   useConversationsQuery,
@@ -54,14 +54,33 @@ export function ConversationsSidebar({
   const conversationsQuery = useConversationsQuery();
   const hideConversationMutation = useHideConversationMutation();
   const logoutMutation = useLogoutMutation();
-
-  const visibleConversations = useMemo(
-    () =>
-      (conversationsQuery.data ?? []).filter((item) =>
-        Boolean(item.lastMessage || item.lastMessageAt),
-      ),
-    [conversationsQuery.data],
+  const draftsByConversationId = useDraftStore(
+    (state) => state.draftsByConversationId,
   );
+  const pendingSendCounts = useDraftStore((state) => state.pendingSendCounts);
+  const outboxItems = useOutboxStore((state) => state.items);
+
+  const visibleConversations = useMemo(() => {
+    const outboxConversationIds = new Set(
+      outboxItems.map((item) => item.conversationId),
+    );
+    return (conversationsQuery.data ?? []).filter((item) => {
+      if (item.type === "group") {
+        return true;
+      }
+      const hasSentMessage = Boolean(item.lastMessage || item.lastMessageAt);
+      const hasDraft = Boolean(draftsByConversationId[item._id]?.trim());
+      const hasPendingOrOutbox =
+        (pendingSendCounts[item._id] ?? 0) > 0 ||
+        outboxConversationIds.has(item._id);
+      return hasSentMessage || hasDraft || hasPendingOrOutbox;
+    });
+  }, [
+    conversationsQuery.data,
+    draftsByConversationId,
+    pendingSendCounts,
+    outboxItems,
+  ]);
 
   const filteredConversations = useMemo(() => {
     const query = filterText.trim().toLowerCase();

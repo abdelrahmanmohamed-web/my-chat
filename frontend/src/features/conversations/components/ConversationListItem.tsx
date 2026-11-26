@@ -17,6 +17,7 @@ import {
 import { formatConversationListTime } from "@/lib/date";
 import {
   useConnectionStore,
+  useDraftStore,
   usePresenceStore,
   useTypingUserIds,
 } from "@/stores";
@@ -53,9 +54,14 @@ export function ConversationListItem({
   const formattedTime = formatConversationListTime(activityIso);
 
   const lastMessage = conversation.lastMessage;
+  const draftText = useDraftStore((state) =>
+    state.draftsByConversationId[conversation._id]?.trim(),
+  );
   const previewText = lastMessage
     ? `${lastMessage.senderId === currentUserId ? "أنت: " : ""}${lastMessage.content}`
-    : "ابدأ المحادثة الآن";
+    : draftText
+      ? `مسودة: ${draftText}`
+      : "ابدأ المحادثة الآن";
 
   const otherUserId = getOtherDirectParticipantId(conversation, currentUserId);
   const isRestFallbackActive = useConnectionStore(

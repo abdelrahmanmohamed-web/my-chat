@@ -2,9 +2,11 @@ import { useState, type FormEvent, type KeyboardEvent } from "react";
 import { SendHorizontalIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useDraftStore } from "@/stores";
 import { MESSAGE_LIMITS, sendMessageSchema } from "@/types/messages";
 
 interface MessageComposerProps {
+  conversationId: string;
   disabled?: boolean;
   onSend: (content: string) => void;
   onKeystroke?: () => void;
@@ -12,12 +14,15 @@ interface MessageComposerProps {
 }
 
 export function MessageComposer({
+  conversationId,
   disabled = false,
   onSend,
   onKeystroke,
   onBlur,
 }: MessageComposerProps) {
-  const [content, setContent] = useState("");
+  const content = useDraftStore(
+    (state) => state.draftsByConversationId[conversationId] ?? "",
+  );
   const [validationError, setValidationError] = useState<string | null>(null);
 
   function submitMessage() {
@@ -36,7 +41,7 @@ export function MessageComposer({
     }
 
     setValidationError(null);
-    setContent("");
+    useDraftStore.getState().setDraft(conversationId, "");
     onSend(parsed.data.content);
   }
 
@@ -74,7 +79,9 @@ export function MessageComposer({
           onKeyDown={handleKeyDown}
           onBlur={() => onBlur?.()}
           onChange={(event) => {
-            setContent(event.target.value);
+            useDraftStore
+              .getState()
+              .setDraft(conversationId, event.target.value);
             if (validationError) {
               setValidationError(null);
             }

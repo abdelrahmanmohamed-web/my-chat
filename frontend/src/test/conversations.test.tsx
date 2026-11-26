@@ -551,12 +551,16 @@ describe("conversations UI flows", () => {
     expect(screen.queryByText("ترقية إلى مشرف")).not.toBeInTheDocument();
   });
 
-  it("hides empty conversations from the sidebar until a message is sent", async () => {
+  it("always shows empty groups, hides empty direct chats unless they have a message or unsent input draft", async () => {
     const emptyDirectConversation: Conversation = {
       _id: "65f1a9c2e4b0a1b2c3d4e698",
       type: "direct",
       participants: [
-        { userId: TEST_USER.id, role: "member", joinedAt: "2026-11-12T10:00:00.000Z" },
+        {
+          userId: TEST_USER.id,
+          role: "member",
+          joinedAt: "2026-11-12T10:00:00.000Z",
+        },
         {
           userId: TEST_OTHER_USER_ID,
           role: "member",
@@ -564,7 +568,31 @@ describe("conversations UI flows", () => {
         },
       ],
       hiddenFor: [],
-      name: "محادثة فارغة",
+      name: "محادثة فردية فارغة",
+      avatarUrl: null,
+      lastMessageAt: null,
+      createdAt: "2026-11-12T10:00:00.000Z",
+      updatedAt: "2026-11-12T10:00:00.000Z",
+    };
+
+    const emptyGroupConversation: Conversation = {
+      _id: "65f1a9c2e4b0a1b2c3d4e697",
+      type: "group",
+      createdBy: TEST_USER.id,
+      participants: [
+        {
+          userId: TEST_USER.id,
+          role: "admin",
+          joinedAt: "2026-11-12T10:00:00.000Z",
+        },
+        {
+          userId: TEST_OTHER_USER_ID,
+          role: "member",
+          joinedAt: "2026-11-12T10:00:00.000Z",
+        },
+      ],
+      hiddenFor: [],
+      name: "مجموعة فارغة",
       avatarUrl: null,
       lastMessageAt: null,
       createdAt: "2026-11-12T10:00:00.000Z",
@@ -574,14 +602,43 @@ describe("conversations UI flows", () => {
     mswServer.use(
       http.get("*/api/conversations", () =>
         HttpResponse.json({
-          conversations: [emptyDirectConversation, TEST_CONVERSATIONS[0]],
+          conversations: [
+            emptyDirectConversation,
+            emptyGroupConversation,
+            TEST_CONVERSATIONS[0],
+          ],
         }),
       ),
     );
 
-    renderAppAt("/");
+    renderAppAt(`/conversations/${emptyDirectConversation._id}`);
 
-    expect(await screen.findByText("سارة علي")).toBeInTheDocument();
-    expect(screen.queryByText("محادثة فارغة")).not.toBeInTheDocument();
+    // Empty group is shown, non-empty direct chat is shown, empty direct chat is hidden
+    expect(await screen.findByText("مجموعة فارغة")).toBeInTheDocument();
+    expect(screen.getByText("سارة علي")).toBeInTheDocument();
+    const sidebar = screen.getByRole("complementary", {
+      name: "قائمة المحادثات",
+    });
+    expect(
+      within(sidebar).queryByText("محادثة فردية فارغة"),
+    ).not.toBeInTheDocument();
+
+    // Typing an unsent draft in the composer input makes the empty direct chat appear
+    const composer = screen.getByLabelText("نص الرسالة");
+    fireEvent.change(composer, { target: { value: "رسالة قيد الكتابة" } });
+    expect(
+      await within(sidebar).findByText("محادثة فردية فارغة"),
+    ).toBeInTheDocument();
+    expect(
+      within(sidebar).getByText("مسودة: رسالة قيد الكتابة"),
+    ).toBeInTheDocument();
+
+    // Clearing the input without sending hides the empty direct chat again
+    fireEvent.change(composer, { target: { value: "   " } });
+    await waitFor(() => {
+      expect(
+        within(sidebar).queryByText("محادثة فردية فارغة"),
+      ).not.toBeInTheDocument();
+    });
   });
 });

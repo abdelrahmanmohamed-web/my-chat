@@ -585,6 +585,7 @@ export function ChatPane({ conversationId }: ChatPaneProps) {
       <TypingIndicator conversationId={conversationId} />
 
       <MessageComposer
+        conversationId={conversationId}
         disabled={messagesQuery.isError}
         onSend={handleSend}
         onKeystroke={handleKeystroke}

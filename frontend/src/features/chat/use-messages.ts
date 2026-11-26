@@ -15,7 +15,7 @@ import {
   MESSAGES_REST_POLL_INTERVAL_MS,
   sendMessageWithResilience,
 } from "@/lib/socket";
-import { useAuthStore, useConnectionStore } from "@/stores";
+import { useAuthStore, useConnectionStore, useDraftStore } from "@/stores";
 import type { Conversation } from "@/types/conversations";
 import type { Message } from "@/types/messages";
 import { MESSAGE_LIMITS } from "@/types/messages";
@@ -128,6 +128,7 @@ export function useSendMessageMutation(conversationId: string) {
     onMutate: async (variables) => {
       const clientId = resolveMessageClientId(variables);
       const senderId = useAuthStore.getState().user?.id ?? "";
+      useDraftStore.getState().incrementPendingSend(conversationId);
 
       await queryClient.cancelQueries({
         queryKey: QUERY_KEYS.messages(conversationId),
@@ -146,6 +147,9 @@ export function useSendMessageMutation(conversationId: string) {
       );
 
       return { clientId };
+    },
+    onSettled: () => {
+      useDraftStore.getState().decrementPendingSend(conversationId);
     },
     onSuccess: ({ message, clientId }) => {
       queryClient.setQueryData<ChatMessagesInfiniteData>(

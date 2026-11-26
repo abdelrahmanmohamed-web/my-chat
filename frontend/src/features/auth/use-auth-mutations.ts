@@ -17,7 +17,7 @@ import {
   updateSessionName,
   uploadUserAvatar,
 } from "@/lib/api";
-import { useAuthStore, useOutboxStore } from "@/stores";
+import { useAuthStore, useDraftStore, useOutboxStore } from "@/stores";
 import type {
   ChangePasswordRequest,
   LoginRequest,
@@ -86,6 +86,7 @@ export function useLogoutMutation() {
       try {
         await logoutUser();
       } finally {
+        useDraftStore.getState().clearDrafts();
         useOutboxStore.getState().clearOutbox();
         useAuthStore.getState().clearAuth();
         queryClient.clear();
