@@ -72,7 +72,7 @@ export function MessageComposer({
           value={content}
           disabled={disabled}
           onKeyDown={handleKeyDown}
-          onBlur={onBlur}
+          onBlur={() => onBlur?.()}
           onChange={(event) => {
             setContent(event.target.value);
             if (validationError) {

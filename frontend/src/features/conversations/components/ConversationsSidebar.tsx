@@ -55,19 +55,26 @@ export function ConversationsSidebar({
   const hideConversationMutation = useHideConversationMutation();
   const logoutMutation = useLogoutMutation();
 
+  const visibleConversations = useMemo(
+    () =>
+      (conversationsQuery.data ?? []).filter((item) =>
+        Boolean(item.lastMessage || item.lastMessageAt),
+      ),
+    [conversationsQuery.data],
+  );
+
   const filteredConversations = useMemo(() => {
-    const items = conversationsQuery.data ?? [];
     const query = filterText.trim().toLowerCase();
     if (!query) {
-      return items;
+      return visibleConversations;
     }
 
-    return items.filter((item) => {
+    return visibleConversations.filter((item) => {
       const title = (item.name ?? "").toLowerCase();
       const preview = (item.lastMessage?.content ?? "").toLowerCase();
       return title.includes(query) || preview.includes(query);
     });
-  }, [conversationsQuery.data, filterText]);
+  }, [visibleConversations, filterText]);
 
   function handleHideConversation(conversationId: string) {
     hideConversationMutation.mutate(conversationId, {
@@ -202,7 +209,7 @@ export function ConversationsSidebar({
 
         {!conversationsQuery.isPending &&
           !conversationsQuery.isError &&
-          (conversationsQuery.data?.length ?? 0) === 0 && (
+          visibleConversations.length === 0 && (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
               <p className="text-sm text-muted-foreground">
                 لا توجد محادثات بعد.
@@ -223,7 +230,7 @@ export function ConversationsSidebar({
 
         {!conversationsQuery.isPending &&
           !conversationsQuery.isError &&
-          (conversationsQuery.data?.length ?? 0) > 0 &&
+          visibleConversations.length > 0 &&
           filteredConversations.length === 0 && (
             <p className="py-8 text-center text-sm text-muted-foreground">
               لا توجد محادثات مطابقة للبحث.

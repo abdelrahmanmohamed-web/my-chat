@@ -88,9 +88,12 @@ describe("Phase 5 polish, typing, presence, unread & theme", () => {
     );
 
     fireEvent.blur(composer);
-    expect(fakeSocket.emitted.some((c) => c.event === "typing:stop")).toBe(
-      true,
-    );
+    expect(
+      fakeSocket.emitted.some(
+        (c) =>
+          c.event === "typing:stop" && c.args[0] === TEST_CONVERSATION_ID,
+      ),
+    ).toBe(true);
   });
 
   it("renders receiver typing indicator and auto-expires after 5 seconds", async () => {

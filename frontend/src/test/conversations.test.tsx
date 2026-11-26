@@ -511,4 +511,38 @@ describe("conversations UI flows", () => {
     expect(screen.queryByText("طرد من المجموعة")).not.toBeInTheDocument();
     expect(screen.queryByText("ترقية إلى مشرف")).not.toBeInTheDocument();
   });
+
+  it("hides empty conversations from the sidebar until a message is sent", async () => {
+    const emptyDirectConversation: Conversation = {
+      _id: "65f1a9c2e4b0a1b2c3d4e698",
+      type: "direct",
+      participants: [
+        { userId: TEST_USER.id, role: "member", joinedAt: "2026-11-12T10:00:00.000Z" },
+        {
+          userId: TEST_OTHER_USER_ID,
+          role: "member",
+          joinedAt: "2026-11-12T10:00:00.000Z",
+        },
+      ],
+      hiddenFor: [],
+      name: "محادثة فارغة",
+      avatarUrl: null,
+      lastMessageAt: null,
+      createdAt: "2026-11-12T10:00:00.000Z",
+      updatedAt: "2026-11-12T10:00:00.000Z",
+    };
+
+    mswServer.use(
+      http.get("*/api/conversations", () =>
+        HttpResponse.json({
+          conversations: [emptyDirectConversation, TEST_CONVERSATIONS[0]],
+        }),
+      ),
+    );
+
+    renderAppAt("/");
+
+    expect(await screen.findByText("سارة علي")).toBeInTheDocument();
+    expect(screen.queryByText("محادثة فارغة")).not.toBeInTheDocument();
+  });
 });

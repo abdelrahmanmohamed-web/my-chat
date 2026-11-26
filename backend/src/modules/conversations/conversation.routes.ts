@@ -165,30 +165,6 @@ conversationRouter.post("/", async (req, res) => {
     return res.status(404).json({ error: "Participant not found" });
   }
 
-  if (result.created) {
-    await emitWithSocket(async (io) => {
-      const callerId = req.user!.id;
-      const baseObject = result.conversation.toObject();
-      for (const pId of getParticipantIds(result.conversation)) {
-        if (pId === callerId) {
-          io.to(`user:${pId}`).emit("conversation:created", {
-            conversation: result.conversation,
-          });
-        } else {
-          const copy = {
-            ...baseObject,
-            name: null as string | null,
-            avatarUrl: null as string | null,
-          };
-          await populateAutomaticConversationNames([copy], pId);
-          io.to(`user:${pId}`).emit("conversation:created", {
-            conversation: copy,
-          });
-        }
-      }
-    });
-  }
-
   return res
     .status(result.created ? 201 : 200)
     .json({ conversation: result.conversation });

@@ -19,7 +19,10 @@ export function useTypingSender(conversationId: string | undefined) {
 
   const emitStop = useCallback(
     (targetId?: string) => {
-      const id = targetId ?? activeConversationIdRef.current;
+      const id =
+        typeof targetId === "string"
+          ? targetId
+          : activeConversationIdRef.current;
       if (idleTimerRef.current !== null) {
         window.clearTimeout(idleTimerRef.current);
         idleTimerRef.current = null;
@@ -37,6 +40,10 @@ export function useTypingSender(conversationId: string | undefined) {
     },
     [isRestFallbackActive, socketInstance],
   );
+
+  const handleStop = useCallback(() => {
+    emitStop();
+  }, [emitStop]);
 
   const emitStart = useCallback(() => {
     const id = activeConversationIdRef.current;
@@ -69,7 +76,7 @@ export function useTypingSender(conversationId: string | undefined) {
 
   return {
     handleKeystroke: emitStart,
-    handleBlur: emitStop,
-    handleSend: emitStop,
+    handleBlur: handleStop,
+    handleSend: handleStop,
   };
 }
