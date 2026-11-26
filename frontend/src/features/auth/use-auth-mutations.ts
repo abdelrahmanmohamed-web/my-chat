@@ -7,6 +7,7 @@ import {
   changePassword,
   getCurrentUser,
   listSessions,
+  loginDemoUser,
   loginUser,
   logoutUser,
   registerUser,
@@ -48,6 +49,24 @@ export function useLoginMutation() {
         accessToken: data.accessToken,
         user: data.user,
       });
+    },
+  });
+}
+
+export function useDemoLoginMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => loginDemoUser(),
+    onSuccess: (data) => {
+      queryClient.setQueryData(QUERY_KEYS.me, data.user);
+      useAuthStore.getState().setSession({
+        accessToken: data.accessToken,
+        user: data.user,
+      });
+      toast.success(
+        `تم الدخول بالحساب التجريبي (${data.user.displayName}). سيتم حذفه تلقائياً بعد 120 دقيقة.`,
+      );
     },
   });
 }

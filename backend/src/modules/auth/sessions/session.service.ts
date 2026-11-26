@@ -30,6 +30,7 @@ export type SessionMeta = {
   ip?: string;
   userAgent?: string;
   name?: string;
+  refreshTtlSeconds?: number;
 };
 
 export type SanitizedSession = {
@@ -111,12 +112,13 @@ export async function createSession(
 
   const device = meta.device?.trim() || parsedUa.device;
   const sessionName = meta.name?.trim() || parsedUa.defaultName;
+  const refreshTtlSeconds = meta.refreshTtlSeconds ?? REFRESH_TTL_SECONDS;
 
   const refreshToken = await createRefreshToken(
     userId,
     sessionId.toString(),
     1,
-    REFRESH_TTL_SECONDS,
+    refreshTtlSeconds,
   );
 
   const session = await Session.create({
@@ -130,7 +132,7 @@ export async function createSession(
     ip: meta.ip ?? "Unknown IP",
     userAgent: (meta.userAgent ?? "Unknown Agent").slice(0, 300),
     lastActiveAt: new Date(),
-    expiresAt: new Date(Date.now() + REFRESH_TTL_SECONDS * 1000),
+    expiresAt: new Date(Date.now() + refreshTtlSeconds * 1000),
   });
 
   const accessToken = await createAccessToken(

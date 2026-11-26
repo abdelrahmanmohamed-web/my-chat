@@ -43,8 +43,24 @@ const userSchema = new Schema(
       min: 1,
       max: 10,
     },
+    isDemo: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    isDemoCompanion: {
+      type: Boolean,
+      default: false,
+    },
+    demoExpiresAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true },
 );
+
+// Fallback TTL purge 5 minutes after demoExpiresAt; primary cascading cleanup runs on schedule.
+userSchema.index({ demoExpiresAt: 1 }, { expireAfterSeconds: 300 });
 
 export const User = models.User || model("User", userSchema);

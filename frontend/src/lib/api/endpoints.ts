@@ -1,5 +1,6 @@
 export const AUTH_ENDPOINTS = {
   register: "/api/auth/register",
+  demo: "/api/auth/demo",
   login: "/api/auth/login",
   refresh: "/api/auth/refresh",
   logout: "/api/auth/logout",

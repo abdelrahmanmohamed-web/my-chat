@@ -7,6 +7,8 @@ export interface PublicUser {
   username: string;
   displayName: string;
   avatarUrl?: string | null;
+  isDemo?: boolean;
+  demoExpiresAt?: string | null;
 }
 
 /**

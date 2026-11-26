@@ -1,6 +1,7 @@
 export {
   changePassword,
   getCurrentUser,
+  loginDemoUser,
   loginUser,
   logoutUser,
   refreshAccessToken,

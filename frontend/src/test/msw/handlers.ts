@@ -12,6 +12,25 @@ export const authHandlers = [
     return HttpResponse.json({ user: TEST_USER }, { status: 201 });
   }),
 
+  http.post("*/api/auth/demo", () => {
+    return HttpResponse.json(
+      {
+        accessToken: TEST_ACCESS_TOKEN,
+        tokenType: "Bearer",
+        expiresIn: 900,
+        user: {
+          ...TEST_USER,
+          email: "demo+1@demo.local",
+          username: "demo_1",
+          displayName: "حساب تجريبي +1",
+          isDemo: true,
+          demoExpiresAt: new Date(Date.now() + 120 * 60 * 1000).toISOString(),
+        },
+      },
+      { status: 201 },
+    );
+  }),
+
   http.post("*/api/auth/login", () => {
     return HttpResponse.json({
       accessToken: TEST_ACCESS_TOKEN,

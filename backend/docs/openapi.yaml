@@ -165,6 +165,37 @@ paths:
           "$ref": "#/components/responses/TooManyRequests"
         "500":
           "$ref": "#/components/responses/InternalServerError"
+  "/api/auth/demo":
+    post:
+      tags:
+        - Auth
+      operationId: createDemoSession
+      summary: Create and log into an ephemeral demo account
+      description: "Atomically creates a numbered demo user (`Demo User +1`, `+2`, ...) pre-populated with sample direct and group conversations, issues a 120-minute refresh cookie and access token, and schedules automatic cleanup after 120 minutes."
+      security: []
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+        - limiter: register
+          windowMs: 900000
+          defaultLimit: "env.registerRateLimit (default 10)"
+          skipSuccessfulRequests: false
+      responses:
+        "201":
+          description: Demo account created and authenticated.
+          headers:
+            Set-Cookie:
+              "$ref": "#/components/headers/SetRefreshCookie"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/LoginSuccessResponse"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
   "/api/auth/login":
     post:
       tags:
@@ -1725,6 +1756,12 @@ components:
           type: string
         avatarUrl:
           type: string
+          nullable: true
+        isDemo:
+          type: boolean
+        demoExpiresAt:
+          type: string
+          format: date-time
           nullable: true
     UserResponse:
       type: object

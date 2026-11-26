@@ -41,7 +41,7 @@ describe("Phase 1 auth flows", () => {
     fireEvent.click(screen.getByRole("button", { name: "دخول" }));
 
     expect(
-      await screen.findByRole("heading", { name: "الأمان والجلسات" }),
+      await screen.findByRole("heading", { name: "الإعدادات" }),
     ).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/settings/security");
   });
@@ -367,5 +367,50 @@ describe("Phase 1 auth flows", () => {
     } finally {
       consoleErrorSpy.mockRestore();
     }
+  });
+
+  it("logs in immediately with a numbered demo account from login page", async () => {
+    let demoCalls = 0;
+
+    mswServer.use(
+      http.post("*/api/auth/refresh", () =>
+        HttpResponse.json({ error: "NO_SESSION" }, { status: 401 }),
+      ),
+      http.post("*/api/auth/demo", () => {
+        demoCalls += 1;
+        return HttpResponse.json(
+          {
+            accessToken: TEST_ACCESS_TOKEN,
+            tokenType: "Bearer",
+            expiresIn: 900,
+            user: {
+              ...TEST_USER,
+              email: `demo+${demoCalls}@demo.local`,
+              username: `demo_${demoCalls}`,
+              displayName: `حساب تجريبي +${demoCalls}`,
+              isDemo: true,
+              demoExpiresAt: new Date(
+                Date.now() + 120 * 60 * 1000,
+              ).toISOString(),
+            },
+          },
+          { status: 201 },
+        );
+      }),
+    );
+
+    const { router } = renderAppAt("/login");
+
+    const demoButton = await screen.findByRole("button", {
+      name: "دخول سريع بحساب تجريبي",
+    });
+    fireEvent.click(demoButton);
+
+    expect(await screen.findByText("حساب تجريبي +1")).toBeInTheDocument();
+    expect(screen.getByText("تجريبي")).toBeInTheDocument();
+    expect(screen.getByText("@demo_1")).toBeInTheDocument();
+    expect(demoCalls).toBe(1);
+    expect(router.state.location.pathname).toBe("/");
+    expect(useAuthStore.getState().user?.isDemo).toBe(true);
   });
 });

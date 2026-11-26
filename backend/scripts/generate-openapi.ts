@@ -550,6 +550,8 @@ function buildReusableComponents(): JsonObject {
           username: { type: "string" },
           displayName: { type: "string" },
           avatarUrl: { type: "string", nullable: true },
+          isDemo: { type: "boolean" },
+          demoExpiresAt: { type: "string", format: "date-time", nullable: true },
         },
       },
 
@@ -1035,6 +1037,26 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
         ),
       },
       "413": { $ref: "#/components/responses/PayloadTooLarge" },
+      "429": { $ref: "#/components/responses/TooManyRequests" },
+      "500": { $ref: "#/components/responses/InternalServerError" },
+    },
+  },
+
+  "POST /api/auth/demo": {
+    operationId: "createDemoSession",
+    tags: ["Auth"],
+    summary: "Create and log into an ephemeral demo account",
+    description:
+      "Atomically creates a numbered demo user (`Demo User +1`, `+2`, ...) pre-populated with sample direct and group conversations, issues a 120-minute refresh cookie and access token, and schedules automatic cleanup after 120 minutes.",
+    securityOverride: [],
+    responses: {
+      "201": {
+        description: "Demo account created and authenticated.",
+        headers: {
+          "Set-Cookie": { $ref: "#/components/headers/SetRefreshCookie" },
+        },
+        content: jsonBodyRef("LoginSuccessResponse"),
+      },
       "429": { $ref: "#/components/responses/TooManyRequests" },
       "500": { $ref: "#/components/responses/InternalServerError" },
     },

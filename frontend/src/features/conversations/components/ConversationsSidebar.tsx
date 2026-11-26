@@ -4,11 +4,12 @@ import {
   MessageSquarePlusIcon,
   MoreVerticalIcon,
   SearchIcon,
-  ShieldCheckIcon,
+  SettingsIcon,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { conversationPath, ROUTES } from "@/app/routes";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -90,9 +91,16 @@ export function ConversationsSidebar({
             avatarUrl={user?.avatarUrl}
           />
           <div className="min-w-0 text-start">
-            <p className="truncate text-sm font-semibold text-foreground">
-              {user?.displayName ?? "محادثاتي"}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="truncate text-sm font-semibold text-foreground">
+                {user?.displayName ?? "محادثاتي"}
+              </p>
+              {user?.isDemo && (
+                <Badge variant="secondary" className="shrink-0 text-[10px]">
+                  تجريبي
+                </Badge>
+              )}
+            </div>
             {user && (
               <p className="truncate text-xs text-muted-foreground">
                 @{user.username}
@@ -128,8 +136,8 @@ export function ConversationsSidebar({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem render={<Link to={ROUTES.settingsSecurity} />}>
-                <ShieldCheckIcon aria-hidden="true" />
-                <span>الأمان والجلسات</span>
+                <SettingsIcon aria-hidden="true" />
+                <span>الإعدادات</span>
               </DropdownMenuItem>
               <ThemeSubMenu />
               <DropdownMenuSeparator />

@@ -24,6 +24,7 @@ import {
   type FieldErrors,
 } from "../auth.utils";
 import { AuthShell } from "../components/AuthShell";
+import { DemoLoginSection } from "../components/DemoLoginSection";
 import { PasswordInput } from "../components/PasswordInput";
 import { useRegisterMutation } from "../use-auth-mutations";
 
@@ -186,6 +187,15 @@ export function RegisterPage() {
           )}
           <span>إنشاء الحساب</span>
         </Button>
+
+        <DemoLoginSection
+          disabled={registerMutation.isPending}
+          onSuccess={() => {
+            setFormError(null);
+            void navigate(ROUTES.home, { replace: true });
+          }}
+          onError={setFormError}
+        />
       </form>
     </AuthShell>
   );

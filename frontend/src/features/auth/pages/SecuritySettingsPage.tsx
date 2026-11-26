@@ -20,7 +20,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuthStore } from "@/stores";
-import { mapAuthApiErrorMessage } from "../auth.utils";
+import { mapAuthApiErrorMessage, formatSessionTimestamp } from "../auth.utils";
 import { ChangePasswordCard } from "../components/ChangePasswordCard";
 import { ProfileAvatarCard } from "../components/ProfileAvatarCard";
 import { SessionCard } from "../components/SessionCard";
@@ -54,7 +54,7 @@ export function SecuritySettingsPage() {
               <ArrowRightIcon className="size-4" aria-hidden="true" />
             </Link>
             <div>
-              <h1 className="text-base font-semibold">الأمان والجلسات</h1>
+              <h1 className="text-base font-semibold">الإعدادات</h1>
               {user && (
                 <p className="text-xs text-muted-foreground">
                   {user.displayName} ·{" "}
@@ -84,6 +84,22 @@ export function SecuritySettingsPage() {
       </header>
 
       <main className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
+        {user?.isDemo && (
+          <Alert>
+            <AlertDescription>
+              أنت تستخدم حساباً تجريبياً مؤقتاً (
+              <span dir="ltr" className="inline-block font-medium">
+                @{user.username}
+              </span>
+              ). سيتم حذف هذا الحساب وجميع بياناته تلقائياً بعد 120 دقيقة
+              {user.demoExpiresAt
+                ? ` (${formatSessionTimestamp(user.demoExpiresAt)})`
+                : ""}
+              .
+            </AlertDescription>
+          </Alert>
+        )}
+
         <ProfileAvatarCard />
 
         <Card>

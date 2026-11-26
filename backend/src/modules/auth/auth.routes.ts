@@ -4,6 +4,7 @@
  * ============================================================================
  * Exposes endpoints for authentication and account operations:
  * - POST /register        : New user registration.
+ * - POST /demo            : Ephemeral demo account creation and session login.
  * - POST /login           : Credential validation, session creation, and tokens.
  * - POST /refresh         : Access token renewal and refresh token rotation.
  * - POST /logout          : Session revocation.
@@ -41,6 +42,10 @@ import {
   updateUserAvatar,
 } from "./auth.service.ts";
 import { verifyRefreshToken } from "./auth.tokens.ts";
+import {
+  createDemoAccountSession,
+  DEMO_TTL_MS,
+} from "./demo/demo.service.ts";
 import { rotateSessionToken } from "./sessions/session.service.ts";
 
 export const authRouter = Router();
@@ -134,6 +139,30 @@ authRouter.post("/register", registerRateLimiter, async (req, res) => {
     }
     throw error;
   }
+});
+
+/**
+ * Creates a unique ephemeral demo account (`Demo User +N`) with pre-seeded
+ * conversations and immediately starts a 120-minute authenticated session.
+ */
+authRouter.post("/demo", registerRateLimiter, async (req, res) => {
+  const userAgent = req.get("user-agent") ?? "Unknown device";
+  const result = await createDemoAccountSession({
+    ip: req.ip ?? "unknown",
+    userAgent,
+  });
+
+  res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, {
+    ...getRefreshCookieOptions(),
+    maxAge: DEMO_TTL_MS,
+  });
+
+  return res.status(201).json({
+    accessToken: result.accessToken,
+    tokenType: result.tokenType,
+    expiresIn: result.expiresIn,
+    user: result.user,
+  });
 });
 
 /**

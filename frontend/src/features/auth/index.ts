@@ -4,6 +4,7 @@ export { SecuritySettingsPage } from "./pages/SecuritySettingsPage";
 export {
   useChangePasswordMutation,
   useCurrentUserQuery,
+  useDemoLoginMutation,
   useLoginMutation,
   useLogoutMutation,
   useRegisterMutation,

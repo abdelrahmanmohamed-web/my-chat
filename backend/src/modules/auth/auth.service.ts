@@ -50,6 +50,8 @@ export type PublicUserSource = {
   username: string;
   displayName: string;
   avatarUrl?: string | null;
+  isDemo?: boolean;
+  demoExpiresAt?: Date | string | null;
 };
 
 export type LoginResult =
@@ -83,6 +85,14 @@ export function toPublicUser(user: PublicUserSource) {
     username: user.username,
     displayName: user.displayName,
     ...(user.avatarUrl === undefined ? {} : { avatarUrl: user.avatarUrl }),
+    ...(user.isDemo
+      ? {
+          isDemo: true,
+          demoExpiresAt: user.demoExpiresAt
+            ? new Date(user.demoExpiresAt).toISOString()
+            : null,
+        }
+      : {}),
   };
 }
 
@@ -134,7 +144,11 @@ export async function login(
     .verify(hashToVerify, input.password)
     .catch(() => false);
 
-  if (!user || !passwordMatches) {
+  if (
+    !user ||
+    !passwordMatches ||
+    (user.isDemo && user.demoExpiresAt && user.demoExpiresAt <= new Date())
+  ) {
     return { status: "invalid_credentials" };
   }
 
@@ -215,9 +229,15 @@ export async function logout(userId: string, sid: string): Promise<void> {
  */
 export async function getUserProfile(userId: string) {
   const user = await User.findById(userId).select(
-    "email username displayName avatarUrl maxSessions",
+    "email username displayName avatarUrl maxSessions isDemo demoExpiresAt",
   );
-  return user ? toPublicUser(user) : null;
+  if (
+    !user ||
+    (user.isDemo && user.demoExpiresAt && user.demoExpiresAt <= new Date())
+  ) {
+    return null;
+  }
+  return toPublicUser(user);
 }
 
 /**
@@ -231,7 +251,9 @@ export async function updateUserAvatar(
     userId,
     { $set: { avatarUrl } },
     { returnDocument: "after" },
-  ).select("email username displayName avatarUrl maxSessions");
+  ).select(
+    "email username displayName avatarUrl maxSessions isDemo demoExpiresAt",
+  );
 
   return user ? toPublicUser(user) : null;
 }

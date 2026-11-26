@@ -235,7 +235,16 @@ export async function searchUsers(
 
   const pattern = new RegExp(escapeRegex(normalizedQuery), "i");
   const filter: Record<string, unknown> = {
-    $or: [{ username: pattern }, { email: pattern }],
+    isDemoCompanion: { $ne: true },
+    $and: [
+      { $or: [{ username: pattern }, { email: pattern }] },
+      {
+        $or: [
+          { isDemo: { $ne: true } },
+          { demoExpiresAt: { $gt: new Date() } },
+        ],
+      },
+    ],
   };
 
   if (Types.ObjectId.isValid(currentUserId)) {

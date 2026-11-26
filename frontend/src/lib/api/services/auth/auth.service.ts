@@ -28,6 +28,13 @@ export async function loginUser(
   return data;
 }
 
+export async function loginDemoUser(): Promise<LoginSuccessResponse> {
+  const { data } = await httpClient.post<LoginSuccessResponse>(
+    AUTH_ENDPOINTS.demo,
+  );
+  return data;
+}
+
 export function refreshAccessToken(): Promise<string | null> {
   return refreshSession();
 }

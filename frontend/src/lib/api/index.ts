@@ -17,6 +17,7 @@ export {
   changePassword,
   getCurrentUser,
   listSessions,
+  loginDemoUser,
   loginUser,
   logoutUser,
   refreshAccessToken,

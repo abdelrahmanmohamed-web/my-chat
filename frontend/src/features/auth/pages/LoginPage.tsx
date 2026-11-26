@@ -23,6 +23,7 @@ import {
   type FieldErrors,
 } from "../auth.utils";
 import { AuthShell } from "../components/AuthShell";
+import { DemoLoginSection } from "../components/DemoLoginSection";
 import { MaxSessionsDialog } from "../components/MaxSessionsDialog";
 import { PasswordInput } from "../components/PasswordInput";
 import { useLoginMutation } from "../use-auth-mutations";
@@ -161,6 +162,15 @@ export function LoginPage() {
           {isPending && <Spinner className="size-4" aria-hidden="true" />}
           <span>دخول</span>
         </Button>
+
+        <DemoLoginSection
+          disabled={isPending}
+          onSuccess={() => {
+            setFormError(null);
+            void navigate(getRedirectTarget(location.state), { replace: true });
+          }}
+          onError={setFormError}
+        />
       </form>
 
       <MaxSessionsDialog

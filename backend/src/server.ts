@@ -11,6 +11,7 @@ import {
   initSocketServer,
   closeSocketServer,
 } from "./infrastructure/socket.ts";
+import { startDemoCleanupScheduler } from "./modules/auth/demo/demo.service.ts";
 
 const logger = pino({
   level: env.logLevel,
@@ -24,6 +25,7 @@ const logger = pino({
   },
 });
 let shuttingDown = false;
+let stopDemoCleanup: (() => void) | null = null;
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
 process.on("unhandledRejection", (reason) => {
@@ -44,6 +46,8 @@ async function closeHttpServer(server: http.Server): Promise<void> {
 }
 
 async function closeResources(server: http.Server): Promise<void> {
+  stopDemoCleanup?.();
+  stopDemoCleanup = null;
   await closeSocketServer();
   await closeHttpServer(server);
   await disconnectMongoDB();
@@ -53,6 +57,7 @@ async function startServer(): Promise<void> {
   let server: http.Server | undefined;
   try {
     await connectMongoDB();
+    stopDemoCleanup = startDemoCleanupScheduler(logger);
     const httpServer = http.createServer(createApp(logger));
     initSocketServer(httpServer, logger);
     server = httpServer;
