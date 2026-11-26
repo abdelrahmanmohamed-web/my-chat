@@ -119,7 +119,7 @@ export function ConversationsSidebar({
           <div className="min-w-0 text-start">
             <div className="flex items-center gap-1.5">
               <p className="truncate text-sm font-semibold text-foreground">
-                {user?.displayName ?? "محادثاتي"}
+                {user?.displayName ?? "نجوى"}
               </p>
               {user?.isDemo && (
                 <Badge variant="secondary" className="shrink-0 text-[10px]">

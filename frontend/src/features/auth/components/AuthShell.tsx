@@ -29,7 +29,7 @@ export function AuthShell({
             <MessageSquareLockIcon className="size-6" aria-hidden="true" />
           </div>
           <span className="text-lg font-semibold tracking-tight text-foreground">
-            محادثاتي
+            نجوى
           </span>
         </div>
 

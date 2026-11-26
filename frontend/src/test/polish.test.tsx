@@ -289,7 +289,7 @@ describe("Phase 5 polish, typing, presence, unread & theme", () => {
     });
 
     await waitFor(() => {
-      expect(document.title).toContain("(1) شات");
+      expect(document.title).toContain("(1) سَمَر");
     });
 
     expect(screen.getByText("1")).toBeInTheDocument();

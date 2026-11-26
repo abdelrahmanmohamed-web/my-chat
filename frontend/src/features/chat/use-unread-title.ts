@@ -3,7 +3,7 @@ import { useConversationsQuery } from "@/features/conversations";
 
 /**
  * Keeps document.title in sync with total unread messages across conversations.
- * Format: "(N) شات" when N > 0, otherwise "شات".
+ * Format: "(N) سَمَر" when N > 0, otherwise "سَمَر".
  */
 export function useDocumentTitleUnread(): void {
   const { data: conversations } = useConversationsQuery();
@@ -18,13 +18,13 @@ export function useDocumentTitleUnread(): void {
       0;
 
     if (totalUnread > 0) {
-      document.title = `(${totalUnread}) شات`;
+      document.title = `(${totalUnread}) سَمَر`;
     } else {
-      document.title = "شات";
+      document.title = "سَمَر";
     }
 
     return () => {
-      document.title = "شات";
+      document.title = "سَمَر";
     };
   }, [conversations]);
 }
