@@ -2,22 +2,36 @@
  * ============================================================================
  * Conversation Service
  * ============================================================================
- * Business logic for direct conversations:
+ * Business logic for direct and group conversations:
  * - Creates or restores direct conversations between user pairs.
+ * - Creates group conversations with creator as admin and validated members.
+ * - Manages group participants, roles, and leaving with automatic admin promotion.
  * - Generates normalized direct conversation keys to guarantee pairwise uniqueness.
  * - Lists active conversations visible to a user, ordered by last activity.
- * - Hides conversations per participant without affecting the other party.
+ * - Hides conversations per participant without affecting other members.
  * - Updates conversation metadata (name and avatar).
  * ============================================================================
  */
 
 import { Types } from "mongoose";
 
+import { Message } from "../messages/message.model.ts";
 import { User } from "../users/index.ts";
-import { Conversation } from "./conversation.model.ts";
+import {
+  findConversationForUser,
+  getParticipantIds,
+  isAdmin,
+} from "./conversation.access.ts";
+import {
+  Conversation,
+  MAX_GROUP_PARTICIPANTS,
+} from "./conversation.model.ts";
 import type {
+  AddParticipantsInput,
   ConversationUpdateInput,
   DirectConversationInput,
+  GroupConversationInput,
+  UpdateParticipantRoleInput,
   UserSearchQuery,
 } from "./conversation.schemas.ts";
 
@@ -45,7 +59,7 @@ export function directConversationKey(
 interface ConversationDocLike {
   type?: string;
   name?: string | null;
-  participantIds?: (Types.ObjectId | string)[];
+  participants?: Array<{ userId: Types.ObjectId | string }>;
 }
 
 /**
@@ -66,16 +80,12 @@ export async function populateAutomaticConversationNames(
   const counterpartIdSet = new Set<string>();
 
   for (const conv of conversations) {
-    if (
-      !conv.name &&
-      conv.type === "direct" &&
-      Array.isArray(conv.participantIds)
-    ) {
-      const counterpartId = conv.participantIds.find(
-        (id) => id.toString() !== currentUserIdStr,
+    if (!conv.name && conv.type === "direct") {
+      const counterpartId = getParticipantIds(conv).find(
+        (id) => id !== currentUserIdStr,
       );
       if (counterpartId) {
-        counterpartIdSet.add(counterpartId.toString());
+        counterpartIdSet.add(counterpartId);
       }
     }
   }
@@ -94,16 +104,12 @@ export async function populateAutomaticConversationNames(
   }
 
   for (const conv of conversations) {
-    if (
-      !conv.name &&
-      conv.type === "direct" &&
-      Array.isArray(conv.participantIds)
-    ) {
-      const counterpartId = conv.participantIds.find(
-        (id) => id.toString() !== currentUserIdStr,
+    if (!conv.name && conv.type === "direct") {
+      const counterpartId = getParticipantIds(conv).find(
+        (id) => id !== currentUserIdStr,
       );
       if (counterpartId) {
-        const displayName = userMap.get(counterpartId.toString());
+        const displayName = userMap.get(counterpartId);
         if (displayName) {
           conv.name = displayName;
         }
@@ -137,6 +143,15 @@ function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Counts how many participants in a conversation hold the 'admin' role.
+ */
+function countAdmins(
+  participants: Array<{ role?: string }>,
+): number {
+  return participants.filter((p) => p.role === "admin").length;
+}
+
 // ============================================================================
 // User Search Operations
 // ============================================================================
@@ -151,7 +166,7 @@ export interface ConversationUserSearchResult {
 }
 
 /**
- * Searches users by username or email for starting direct conversations,
+ * Searches users by username or email for starting conversations,
  * excluding the requesting user and sensitive internal fields.
  *
  * @param currentUserId Authenticated user initiating the search
@@ -191,7 +206,7 @@ export async function searchUsers(
 }
 
 // ============================================================================
-// Conversation Operations
+// Conversation Creation & Listing Operations
 // ============================================================================
 
 /**
@@ -239,7 +254,10 @@ export async function createOrRestoreDirectConversation(
       conversation = await Conversation.create({
         type: "direct",
         directKey,
-        participantIds: [currentObjectId, otherObjectId],
+        participants: [
+          { userId: currentObjectId, role: "member" },
+          { userId: otherObjectId, role: "member" },
+        ],
       });
       created = true;
     } catch (error) {
@@ -268,17 +286,101 @@ export async function createOrRestoreDirectConversation(
 }
 
 /**
- * Lists all conversations visible to a user (excluding hidden ones), ordered by recency.
- * Resolves automatic conversation names using the counterpart participant's display name.
+ * Creates a new group conversation with the creator assigned as 'admin'
+ * and deduplicated, verified participants assigned as 'member'.
+ *
+ * @param userId Authenticated creator user identifier
+ * @param input Group name, initial participant IDs, and optional avatar URL
+ */
+export async function createGroupConversation(
+  userId: string,
+  input: GroupConversationInput,
+) {
+  if (!Types.ObjectId.isValid(userId)) {
+    return { kind: "invalid" as const, error: "Invalid user ID" };
+  }
+
+  for (const participantId of input.participantIds) {
+    if (!Types.ObjectId.isValid(participantId)) {
+      return { kind: "invalid" as const, error: "Invalid participant ID" };
+    }
+  }
+
+  const creatorObjectId = new Types.ObjectId(userId);
+  const creatorId = creatorObjectId.toString();
+
+  // Deduplicate participant IDs and exclude the creator
+  const uniqueOtherIds = Array.from(
+    new Set(input.participantIds.map((id) => new Types.ObjectId(id).toString())),
+  ).filter((id) => id !== creatorId);
+
+  if (uniqueOtherIds.length === 0) {
+    return {
+      kind: "invalid" as const,
+      error: "Group conversation requires at least one other participant",
+    };
+  }
+
+  if (uniqueOtherIds.length + 1 > MAX_GROUP_PARTICIPANTS) {
+    return {
+      kind: "invalid" as const,
+      error: `Group conversation cannot exceed ${MAX_GROUP_PARTICIPANTS} participants`,
+    };
+  }
+
+  const otherObjectIds = uniqueOtherIds.map((id) => new Types.ObjectId(id));
+  const existingUsersCount = await User.countDocuments({
+    _id: { $in: otherObjectIds },
+  });
+
+  if (existingUsersCount !== uniqueOtherIds.length) {
+    return {
+      kind: "not_found" as const,
+      error: "One or more participants not found",
+    };
+  }
+
+  const now = new Date();
+  const conversation = await Conversation.create({
+    type: "group",
+    name: input.name,
+    avatarUrl: input.avatarUrl ?? null,
+    createdBy: creatorObjectId,
+    participants: [
+      { userId: creatorObjectId, role: "admin", joinedAt: now },
+      ...otherObjectIds.map((memberId) => ({
+        userId: memberId,
+        role: "member" as const,
+        joinedAt: now,
+      })),
+    ],
+  });
+
+  return { kind: "ok" as const, conversation, created: true as const };
+}
+
+/**
+ * Lists all conversations visible to a user (excluding hidden ones),
+ * ordered by lastMessageAt descending (falling back to createdAt for empty conversations).
+ * Resolves automatic conversation names for direct conversations.
  *
  * @param userId User identifier to fetch conversations for
  * @returns Sorted conversation documents with automatic display names resolved
  */
 export async function listVisibleConversations(userId: string) {
+  if (!Types.ObjectId.isValid(userId)) return [];
+
   const conversations = await Conversation.find({
-    participantIds: userId,
+    "participants.userId": userId,
     hiddenFor: { $ne: userId },
-  }).sort({ updatedAt: -1, _id: -1 });
+  });
+
+  conversations.sort((a, b) => {
+    const aTime = (a.lastMessageAt ?? a.createdAt)?.getTime() ?? 0;
+    const bTime = (b.lastMessageAt ?? b.createdAt)?.getTime() ?? 0;
+    if (bTime !== aTime) return bTime - aTime;
+    return b._id.toString().localeCompare(a._id.toString());
+  });
 
   await populateAutomaticConversationNames(conversations, userId);
 
@@ -293,10 +395,12 @@ export async function listVisibleConversations(userId: string) {
  * @returns True if conversation was matched and updated
  */
 export async function hideConversation(userId: string, conversationId: string) {
-  if (!Types.ObjectId.isValid(conversationId)) return false;
+  if (!Types.ObjectId.isValid(conversationId) || !Types.ObjectId.isValid(userId)) {
+    return false;
+  }
 
   const result = await Conversation.updateOne(
-    { _id: conversationId, participantIds: userId },
+    { _id: conversationId, "participants.userId": userId },
     { $addToSet: { hiddenFor: userId } },
   );
 
@@ -305,33 +409,351 @@ export async function hideConversation(userId: string, conversationId: string) {
 
 /**
  * Updates conversation metadata such as display name or avatar URL.
- * Resolves automatic conversation name if the name is cleared or unset.
+ * In group conversations, only admins may update metadata and name cannot be empty/null.
+ * Resolves automatic conversation name for direct chats if custom name is cleared.
  *
  * @param userId User identifier initiating the update
  * @param conversationId Conversation identifier to modify
  * @param input Partial fields to update
- * @returns Updated conversation document or null if not found
  */
 export async function updateConversation(
   userId: string,
   conversationId: string,
   input: ConversationUpdateInput,
 ) {
-  if (!Types.ObjectId.isValid(conversationId)) return null;
+  const conversation = await findConversationForUser(conversationId, userId);
+  if (!conversation) {
+    return { kind: "not_found" as const };
+  }
 
-  const updates: Record<string, string | null> = {};
-  if (input.name !== undefined) updates.name = input.name;
-  if (input.avatarUrl !== undefined) updates.avatarUrl = input.avatarUrl;
+  if (conversation.type === "group") {
+    if (!isAdmin(conversation, userId)) {
+      return { kind: "forbidden" as const };
+    }
+    if (
+      input.name !== undefined &&
+      (input.name === null || input.name.trim().length === 0)
+    ) {
+      return { kind: "invalid" as const };
+    }
+  }
 
-  const conversation = await Conversation.findOneAndUpdate(
-    { _id: conversationId, participantIds: userId },
-    { $set: updates },
-    { returnDocument: "after", runValidators: true },
-  );
+  if (input.name !== undefined) conversation.name = input.name;
+  if (input.avatarUrl !== undefined) conversation.avatarUrl = input.avatarUrl;
 
-  if (conversation && !conversation.name && conversation.type === "direct") {
+  await conversation.save();
+
+  if (!conversation.name && conversation.type === "direct") {
     await populateAutomaticConversationNames([conversation], userId);
   }
 
-  return conversation;
+  return { kind: "ok" as const, conversation };
+}
+
+// ============================================================================
+// Group Membership Management Operations
+// ============================================================================
+
+/**
+ * Adds new participants to a group conversation (admin only).
+ * Already-present participants are ignored idempotently.
+ */
+export async function addGroupParticipants(
+  userId: string,
+  conversationId: string,
+  input: AddParticipantsInput,
+) {
+  if (!Types.ObjectId.isValid(conversationId)) {
+    return { kind: "invalid" as const, error: "Invalid conversation ID" };
+  }
+
+  for (const candidateId of input.userIds) {
+    if (!Types.ObjectId.isValid(candidateId)) {
+      return { kind: "invalid" as const, error: "Invalid participant ID" };
+    }
+  }
+
+  const conversation = await findConversationForUser(conversationId, userId);
+  if (!conversation) {
+    return { kind: "not_found" as const, error: "Conversation not found" };
+  }
+
+  if (conversation.type !== "group") {
+    return {
+      kind: "invalid" as const,
+      error: "Operation is only supported on group conversations",
+    };
+  }
+
+  if (!isAdmin(conversation, userId)) {
+    return { kind: "forbidden" as const, error: "Admin role required" };
+  }
+
+  const existingIds = new Set(getParticipantIds(conversation));
+  const newUserIds = Array.from(
+    new Set(input.userIds.map((id) => new Types.ObjectId(id).toString())),
+  ).filter((id) => !existingIds.has(id));
+
+  if (newUserIds.length === 0) {
+    return { kind: "ok" as const, conversation, addedUserIds: [] as string[] };
+  }
+
+  if (
+    conversation.participants.length + newUserIds.length >
+    MAX_GROUP_PARTICIPANTS
+  ) {
+    return {
+      kind: "invalid" as const,
+      error: `Group conversation cannot exceed ${MAX_GROUP_PARTICIPANTS} participants`,
+    };
+  }
+
+  const newObjectIds = newUserIds.map((id) => new Types.ObjectId(id));
+  const existingUsersCount = await User.countDocuments({
+    _id: { $in: newObjectIds },
+  });
+  if (existingUsersCount !== newUserIds.length) {
+    return {
+      kind: "not_found" as const,
+      error: "One or more users not found",
+    };
+  }
+
+  const now = new Date();
+  for (const memberObjectId of newObjectIds) {
+    conversation.participants.push({
+      userId: memberObjectId,
+      role: "member",
+      joinedAt: now,
+    });
+  }
+
+  const newIdSet = new Set(newUserIds);
+  conversation.hiddenFor = conversation.hiddenFor.filter(
+    (id) => !newIdSet.has(id.toString()),
+  );
+
+  await conversation.save();
+
+  return { kind: "ok" as const, conversation, addedUserIds: newUserIds };
+}
+
+/**
+ * Removes a participant from a group conversation (admin only).
+ * Prevents removing the last remaining admin.
+ */
+export async function removeGroupParticipant(
+  userId: string,
+  conversationId: string,
+  targetUserId: string,
+) {
+  if (
+    !Types.ObjectId.isValid(conversationId) ||
+    !Types.ObjectId.isValid(targetUserId)
+  ) {
+    return { kind: "invalid" as const, error: "Invalid IDs provided" };
+  }
+
+  const conversation = await findConversationForUser(conversationId, userId);
+  if (!conversation) {
+    return { kind: "not_found" as const, error: "Conversation not found" };
+  }
+
+  if (conversation.type !== "group") {
+    return {
+      kind: "invalid" as const,
+      error: "Operation is only supported on group conversations",
+    };
+  }
+
+  if (!isAdmin(conversation, userId)) {
+    return { kind: "forbidden" as const, error: "Admin role required" };
+  }
+
+  const targetObjectId = new Types.ObjectId(targetUserId);
+  const targetIdStr = targetObjectId.toString();
+  const targetParticipant = conversation.participants.find(
+    (p) => p.userId.toString() === targetIdStr,
+  );
+
+  if (!targetParticipant) {
+    return { kind: "not_found" as const, error: "Participant not found" };
+  }
+
+  if (
+    targetParticipant.role === "admin" &&
+    countAdmins(conversation.participants) <= 1
+  ) {
+    return {
+      kind: "invalid" as const,
+      error: "Cannot remove the last admin from the group",
+    };
+  }
+
+  const targetIndex = conversation.participants.findIndex(
+    (p) => p.userId.toString() === targetIdStr,
+  );
+  if (targetIndex !== -1) {
+    conversation.participants.splice(targetIndex, 1);
+  }
+  conversation.hiddenFor = conversation.hiddenFor.filter(
+    (id) => id.toString() !== targetIdStr,
+  );
+
+  await conversation.save();
+
+  return {
+    kind: "ok" as const,
+    conversation,
+    removedUserId: targetIdStr,
+  };
+}
+
+/**
+ * Allows any group participant to leave a group conversation.
+ * If the last admin leaves while members remain, the oldest member is promoted to admin.
+ * If no participants remain, the group conversation and its messages are deleted.
+ */
+export async function leaveGroupConversation(
+  userId: string,
+  conversationId: string,
+) {
+  if (!Types.ObjectId.isValid(conversationId)) {
+    return { kind: "invalid" as const, error: "Invalid conversation ID" };
+  }
+
+  const conversation = await findConversationForUser(conversationId, userId);
+  if (!conversation) {
+    return { kind: "not_found" as const, error: "Conversation not found" };
+  }
+
+  if (conversation.type !== "group") {
+    return {
+      kind: "invalid" as const,
+      error: "Operation is only supported on group conversations",
+    };
+  }
+
+  const userIdStr = new Types.ObjectId(userId).toString();
+
+  const callerIndex = conversation.participants.findIndex(
+    (p) => p.userId.toString() === userIdStr,
+  );
+  if (callerIndex !== -1) {
+    conversation.participants.splice(callerIndex, 1);
+  }
+  conversation.hiddenFor = conversation.hiddenFor.filter(
+    (id) => id.toString() !== userIdStr,
+  );
+
+  if (conversation.participants.length === 0) {
+    await Promise.all([
+      Conversation.deleteOne({ _id: conversation._id }),
+      Message.deleteMany({ conversationId: conversation._id }),
+    ]);
+
+    return {
+      kind: "ok" as const,
+      deleted: true as const,
+      conversationId: conversation._id.toString(),
+      promotedUserId: null as string | null,
+      remainingUserIds: [] as string[],
+    };
+  }
+
+  let promotedUserId: string | null = null;
+  if (countAdmins(conversation.participants) === 0) {
+    let oldest = conversation.participants[0];
+    let oldestTime = oldest.joinedAt ? new Date(oldest.joinedAt).getTime() : 0;
+    for (const participant of conversation.participants) {
+      const joinedTime = participant.joinedAt
+        ? new Date(participant.joinedAt).getTime()
+        : 0;
+      if (joinedTime < oldestTime) {
+        oldest = participant;
+        oldestTime = joinedTime;
+      }
+    }
+    oldest.role = "admin";
+    promotedUserId = oldest.userId.toString();
+  }
+
+  await conversation.save();
+
+  return {
+    kind: "ok" as const,
+    deleted: false as const,
+    conversation,
+    promotedUserId,
+    remainingUserIds: getParticipantIds(conversation),
+  };
+}
+
+/**
+ * Updates a participant's role in a group conversation (admin only).
+ * Prevents demoting the last remaining admin.
+ */
+export async function updateGroupParticipantRole(
+  userId: string,
+  conversationId: string,
+  targetUserId: string,
+  input: UpdateParticipantRoleInput,
+) {
+  if (
+    !Types.ObjectId.isValid(conversationId) ||
+    !Types.ObjectId.isValid(targetUserId)
+  ) {
+    return { kind: "invalid" as const, error: "Invalid IDs provided" };
+  }
+
+  const conversation = await findConversationForUser(conversationId, userId);
+  if (!conversation) {
+    return { kind: "not_found" as const, error: "Conversation not found" };
+  }
+
+  if (conversation.type !== "group") {
+    return {
+      kind: "invalid" as const,
+      error: "Operation is only supported on group conversations",
+    };
+  }
+
+  if (!isAdmin(conversation, userId)) {
+    return { kind: "forbidden" as const, error: "Admin role required" };
+  }
+
+  const targetIdStr = new Types.ObjectId(targetUserId).toString();
+  const targetParticipant = conversation.participants.find(
+    (p) => p.userId.toString() === targetIdStr,
+  );
+
+  if (!targetParticipant) {
+    return { kind: "not_found" as const, error: "Participant not found" };
+  }
+
+  if (
+    targetParticipant.role === "admin" &&
+    input.role === "member" &&
+    countAdmins(conversation.participants) <= 1
+  ) {
+    return {
+      kind: "invalid" as const,
+      error: "Cannot demote the last admin in the group",
+    };
+  }
+
+  const changed = targetParticipant.role !== input.role;
+  targetParticipant.role = input.role;
+
+  if (changed) {
+    await conversation.save();
+  }
+
+  return {
+    kind: "ok" as const,
+    conversation,
+    changed,
+    targetUserId: targetIdStr,
+    role: input.role,
+  };
 }

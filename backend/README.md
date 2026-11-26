@@ -28,12 +28,16 @@ We designed the backend to prioritize operational simplicity, bulletproof securi
    - **Decision**: Full message creation and read updates are supported over both Socket.io events and REST HTTP endpoints (`POST /api/conversations/:id/messages` and `PATCH /api/conversations/:id/messages/:msgId/read`). REST actions automatically broadcast to Socket.io rooms.
    - **Why**: Allows clients to gracefully fall back to HTTP when WebSocket is blocked by corporate proxies or unstable networks.
 
-6. **Deterministic 1-on-1 Deduplication (`directKey`)**
-   - **Decision**: Storing a sorted composite key (`<minId>:<maxId>`) guarded by a unique sparse index.
-   - **Why**: Guarantees idempotency and prevents race conditions if two users initiate a direct chat simultaneously.
+6. **Unified Direct & Group Conversations (`participants`)**
+   - **Decision**: Both `direct` (1-on-1) and `group` (up to 100 members) conversations share a unified `participants` array (`{ userId, role: "admin" | "member", joinedAt, lastReadMessageId }`), while 1-on-1 deduplication continues to use a sorted composite `directKey` (`<minId>:<maxId>`) guarded by a unique partial index.
+   - **Group Roles & Lifecycle**: Group creators start as `admin`. Admins can update group metadata (`PATCH /api/conversations/:id`), add/remove members (`POST/DELETE /api/conversations/:id/participants`), and change roles (`PATCH /api/conversations/:id/participants/:userId/role`). Removing or demoting the last admin is blocked; if the last admin leaves (`POST /api/conversations/:id/leave`), the oldest member is automatically promoted, and empty groups are deleted.
 
-7. **Privacy-First Presence & Asymmetric Soft Hiding**
-   - **Decision**: User status (`user:status`) is emitted only to counterparts in mutual active chats, not globally. Hiding a chat is per-user (`hiddenFor`) and automatically reactivates upon new incoming messages.
+7. **Privacy-First Presence, Monotonic Read Receipts & Asymmetric Soft Hiding**
+   - **Decision**: User online/offline status (`user:status`) is emitted only to partners in mutual `direct` conversations, not globally or across large groups. Read receipts are updated atomically per participant using `$max` on `participants.$.lastReadMessageId`. Hiding a chat (`hiddenFor`) is per-user and automatically clears upon new incoming messages.
+
+8. **Real-Time Socket.io Events**
+   - **Messaging & Room Events**: `join:conversation`, `leave:conversation`, `message:send`, `message:new` (delivered once per participant via `user:<id>` rooms), `message:read`, `message:read_update`, `typing:start`, `typing:stop`, `user:typing` (requires active room membership), and `user:status`.
+   - **Conversation & Group Lifecycle Events**: `conversation:created`, `conversation:updated`, `participant:added`, `participant:removed`, and `participant:role_changed` (alongside automatic `socketsJoin` / `socketsLeave` on group membership changes).
 
 ---
 

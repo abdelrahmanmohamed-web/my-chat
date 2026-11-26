@@ -7,6 +7,13 @@ import { User } from "../../src/modules/users/user.model.ts";
 import { createSession } from "../../src/modules/auth/sessions/session.service.ts";
 import { connectTestDB, disconnectTestDB, clearTestDB } from "../helpers/db.ts";
 
+interface ParticipantDto {
+  userId: string;
+  role: "admin" | "member";
+  joinedAt: string;
+  lastReadMessageId?: string | null;
+}
+
 describe("Conversation HTTP Routes (/api/conversations)", () => {
   let server: http.Server;
   let baseUrl: string;
@@ -39,7 +46,6 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
   beforeEach(async () => {
     await clearTestDB();
 
-    // Create 3 users and their sessions + access tokens
     const [uA, uB, uC] = await Promise.all([
       User.create({
         email: "route_a@example.com",
@@ -124,7 +130,6 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
       });
       expect(usernameBody.users[0].id).toBeDefined();
 
-      // Search by email and ensure caller (userA) is excluded from shared domain results
       const emailRes = await fetch(
         `${baseUrl}/api/users/search?q=route_b@example.com`,
         {
@@ -139,7 +144,6 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
       expect(emailBody.users[0].id).toBe(userB.id);
       expect(emailBody.users[0].username).toBe("route_b");
 
-      // Searching for self returns empty
       const selfRes = await fetch(`${baseUrl}/api/users/search?q=route_a`, {
         headers: { Authorization: `Bearer ${userA.token}` },
       });
@@ -166,7 +170,7 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
     });
   });
 
-  describe("POST /api/conversations", () => {
+  describe("POST /api/conversations (direct & group)", () => {
     it("should return 401 Unauthorized if no auth token is provided", async () => {
       const res = await fetch(`${baseUrl}/api/conversations`, {
         method: "POST",
@@ -247,17 +251,17 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
         conversation: {
           _id: string;
           type: string;
-          participantIds: string[];
+          participants: ParticipantDto[];
           name: string;
         };
       };
       expect(body.conversation._id).toBeDefined();
       expect(body.conversation.type).toBe("direct");
-      expect(body.conversation.participantIds).toContain(userA.id);
-      expect(body.conversation.participantIds).toContain(pickedParticipantId);
+      const ids = body.conversation.participants.map((p) => p.userId);
+      expect(ids).toContain(userA.id);
+      expect(ids).toContain(pickedParticipantId);
       expect(body.conversation.name).toBe("Route User B");
 
-      // Verify listing returns this conversation
       const listRes = await fetch(`${baseUrl}/api/conversations`, {
         headers: { Authorization: `Bearer ${userA.token}` },
       });
@@ -269,8 +273,7 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
       expect(listBody.conversations[0].name).toBe("Route User B");
     });
 
-    it("should return 200 OK when conversation already exists (idempotent / restored)", async () => {
-      // First call -> 201
+    it("should return 200 OK when direct conversation already exists (idempotent / restored)", async () => {
       const firstRes = await fetch(`${baseUrl}/api/conversations`, {
         method: "POST",
         headers: {
@@ -285,7 +288,6 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
       };
       expect(firstBody.conversation.name).toBe("Route User B");
 
-      // Second call from User B to User A -> 200
       const secondRes = await fetch(`${baseUrl}/api/conversations`, {
         method: "POST",
         headers: {
@@ -302,6 +304,74 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
       expect(secondBody.conversation._id).toBe(firstBody.conversation._id);
       expect(secondBody.conversation.name).toBe("Route User A");
     });
+
+    it("should create a group conversation with 201 and validate name/users/duplicates", async () => {
+      // Missing name -> 400
+      const missingName = await fetch(`${baseUrl}/api/conversations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userA.token}`,
+        },
+        body: JSON.stringify({
+          type: "group",
+          name: "   ",
+          participantIds: [userB.id],
+        }),
+      });
+      expect(missingName.status).toBe(400);
+
+      // Non-existent user -> 404
+      const missingUser = await fetch(`${baseUrl}/api/conversations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userA.token}`,
+        },
+        body: JSON.stringify({
+          type: "group",
+          name: "Ghost Group",
+          participantIds: [userB.id, "507f1f77bcf86cd799439099"],
+        }),
+      });
+      expect(missingUser.status).toBe(404);
+
+      // Valid group creation with duplicates + creator included
+      const createdRes = await fetch(`${baseUrl}/api/conversations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userA.token}`,
+        },
+        body: JSON.stringify({
+          type: "group",
+          name: "Core Devs",
+          participantIds: [userA.id, userB.id, userB.id, userC.id],
+          avatarUrl: "https://example.com/group.png",
+        }),
+      });
+      expect(createdRes.status).toBe(201);
+      const body = (await createdRes.json()) as {
+        conversation: {
+          _id: string;
+          type: string;
+          name: string;
+          avatarUrl: string;
+          participants: ParticipantDto[];
+        };
+      };
+      expect(body.conversation.type).toBe("group");
+      expect(body.conversation.name).toBe("Core Devs");
+      expect(body.conversation.participants).toHaveLength(3);
+      const roleA = body.conversation.participants.find(
+        (p) => p.userId === userA.id,
+      )?.role;
+      const roleB = body.conversation.participants.find(
+        (p) => p.userId === userB.id,
+      )?.role;
+      expect(roleA).toBe("admin");
+      expect(roleB).toBe("member");
+    });
   });
 
   describe("POST /api/conversations/:id/hide", () => {
@@ -316,7 +386,6 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
     });
 
     it("should return 404 if conversation does not exist or caller is not a participant", async () => {
-      // Create conversation between A and B
       const createRes = await fetch(`${baseUrl}/api/conversations`, {
         method: "POST",
         headers: {
@@ -329,7 +398,6 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
         (await createRes.json()) as { conversation: { _id: string } }
       ).conversation;
 
-      // User C attempts to hide it -> 404
       const hideRes = await fetch(
         `${baseUrl}/api/conversations/${conv._id}/hide`,
         {
@@ -341,7 +409,6 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
     });
 
     it("should hide conversation with 204 and remove it from caller's conversation list", async () => {
-      // Create conversation between A and B
       const createRes = await fetch(`${baseUrl}/api/conversations`, {
         method: "POST",
         headers: {
@@ -354,7 +421,6 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
         (await createRes.json()) as { conversation: { _id: string } }
       ).conversation;
 
-      // User A hides it -> 204
       const hideRes = await fetch(
         `${baseUrl}/api/conversations/${conv._id}/hide`,
         {
@@ -364,14 +430,12 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
       );
       expect(hideRes.status).toBe(204);
 
-      // User A no longer sees it in their list
       const listARes = await fetch(`${baseUrl}/api/conversations`, {
         headers: { Authorization: `Bearer ${userA.token}` },
       });
       const listA = (await listARes.json()) as { conversations: unknown[] };
       expect(listA.conversations).toHaveLength(0);
 
-      // User B still sees it in their list
       const listBRes = await fetch(`${baseUrl}/api/conversations`, {
         headers: { Authorization: `Bearer ${userB.token}` },
       });
@@ -424,7 +488,6 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
         (await createRes.json()) as { conversation: { _id: string } }
       ).conversation;
 
-      // User C attempts update
       const updateRes = await fetch(
         `${baseUrl}/api/conversations/${conv._id}`,
         {
@@ -440,7 +503,7 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
       expect(updateRes.status).toBe(404);
     });
 
-    it("should return 200 with updated conversation when valid", async () => {
+    it("should return 200 with updated conversation when valid for direct chat", async () => {
       const createRes = await fetch(`${baseUrl}/api/conversations`, {
         method: "POST",
         headers: {
@@ -476,6 +539,245 @@ describe("Conversation HTTP Routes (/api/conversations)", () => {
       expect(body.conversation.avatarUrl).toBe(
         "https://example.com/avatar.jpg",
       );
+    });
+
+    it("should enforce admin-only updates on group conversations (403 for member, 200 for admin)", async () => {
+      const createRes = await fetch(`${baseUrl}/api/conversations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userA.token}`,
+        },
+        body: JSON.stringify({
+          type: "group",
+          name: "Admin Group",
+          participantIds: [userB.id],
+        }),
+      });
+      const conv = (
+        (await createRes.json()) as { conversation: { _id: string } }
+      ).conversation;
+
+      const memberUpdate = await fetch(
+        `${baseUrl}/api/conversations/${conv._id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userB.token}`,
+          },
+          body: JSON.stringify({ name: "Member Rename" }),
+        },
+      );
+      expect(memberUpdate.status).toBe(403);
+
+      const adminUpdate = await fetch(
+        `${baseUrl}/api/conversations/${conv._id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userA.token}`,
+          },
+          body: JSON.stringify({ name: "Updated Admin Group" }),
+        },
+      );
+      expect(adminUpdate.status).toBe(200);
+    });
+  });
+
+  describe("Group membership endpoints", () => {
+    async function createDirectChat() {
+      const res = await fetch(`${baseUrl}/api/conversations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userA.token}`,
+        },
+        body: JSON.stringify({ participantId: userB.id }),
+      });
+      return ((await res.json()) as { conversation: { _id: string } })
+        .conversation._id;
+    }
+
+    async function createGroupChat() {
+      const res = await fetch(`${baseUrl}/api/conversations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userA.token}`,
+        },
+        body: JSON.stringify({
+          type: "group",
+          name: "Test Group",
+          participantIds: [userB.id],
+        }),
+      });
+      return ((await res.json()) as { conversation: { _id: string } })
+        .conversation._id;
+    }
+
+    it("should return 400 when calling group endpoints on a direct conversation", async () => {
+      const directId = await createDirectChat();
+
+      const addRes = await fetch(
+        `${baseUrl}/api/conversations/${directId}/participants`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userA.token}`,
+          },
+          body: JSON.stringify({ userIds: [userC.id] }),
+        },
+      );
+      expect(addRes.status).toBe(400);
+
+      const leaveRes = await fetch(
+        `${baseUrl}/api/conversations/${directId}/leave`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${userA.token}` },
+        },
+      );
+      expect(leaveRes.status).toBe(400);
+
+      const roleRes = await fetch(
+        `${baseUrl}/api/conversations/${directId}/participants/${userB.id}/role`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userA.token}`,
+          },
+          body: JSON.stringify({ role: "admin" }),
+        },
+      );
+      expect(roleRes.status).toBe(400);
+
+      const removeRes = await fetch(
+        `${baseUrl}/api/conversations/${directId}/participants/${userB.id}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${userA.token}` },
+        },
+      );
+      expect(removeRes.status).toBe(400);
+    });
+
+    it("should manage participants, roles, and leaving with automatic admin promotion", async () => {
+      const groupId = await createGroupChat();
+
+      // Member (userB) cannot add userC -> 403
+      const forbiddenAdd = await fetch(
+        `${baseUrl}/api/conversations/${groupId}/participants`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userB.token}`,
+          },
+          body: JSON.stringify({ userIds: [userC.id] }),
+        },
+      );
+      expect(forbiddenAdd.status).toBe(403);
+
+      // Admin (userA) adds userC -> 200
+      const addRes = await fetch(
+        `${baseUrl}/api/conversations/${groupId}/participants`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userA.token}`,
+          },
+          body: JSON.stringify({ userIds: [userB.id, userC.id] }),
+        },
+      );
+      expect(addRes.status).toBe(200);
+      const addBody = (await addRes.json()) as {
+        conversation: { participants: ParticipantDto[] };
+      };
+      expect(addBody.conversation.participants).toHaveLength(3);
+
+      // Admin cannot demote self while sole admin -> 400
+      const demoteLast = await fetch(
+        `${baseUrl}/api/conversations/${groupId}/participants/${userA.id}/role`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userA.token}`,
+          },
+          body: JSON.stringify({ role: "member" }),
+        },
+      );
+      expect(demoteLast.status).toBe(400);
+
+      // Admin promotes userB -> 200
+      const promoteRes = await fetch(
+        `${baseUrl}/api/conversations/${groupId}/participants/${userB.id}/role`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userA.token}`,
+          },
+          body: JSON.stringify({ role: "admin" }),
+        },
+      );
+      expect(promoteRes.status).toBe(200);
+
+      // Admin removes userC -> 200
+      const removeRes = await fetch(
+        `${baseUrl}/api/conversations/${groupId}/participants/${userC.id}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${userA.token}` },
+        },
+      );
+      expect(removeRes.status).toBe(200);
+      const removeBody = (await removeRes.json()) as {
+        conversation: { participants: ParticipantDto[] };
+      };
+      expect(removeBody.conversation.participants).toHaveLength(2);
+
+      // Demote userB back to member, then userA leaves -> userB auto-promoted
+      await fetch(
+        `${baseUrl}/api/conversations/${groupId}/participants/${userB.id}/role`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userA.token}`,
+          },
+          body: JSON.stringify({ role: "member" }),
+        },
+      );
+
+      const leaveA = await fetch(
+        `${baseUrl}/api/conversations/${groupId}/leave`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${userA.token}` },
+        },
+      );
+      expect(leaveA.status).toBe(200);
+      const leaveABody = (await leaveA.json()) as {
+        conversation: { participants: ParticipantDto[] };
+      };
+      expect(leaveABody.conversation.participants).toHaveLength(1);
+      expect(leaveABody.conversation.participants[0].role).toBe("admin");
+
+      // Last member (userB) leaves -> 204
+      const leaveB = await fetch(
+        `${baseUrl}/api/conversations/${groupId}/leave`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${userB.token}` },
+        },
+      );
+      expect(leaveB.status).toBe(204);
     });
   });
 });

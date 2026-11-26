@@ -23,6 +23,7 @@ describe("WebSocket Read Receipts & Scoped Presence (socket.presence_read.test.t
   let userC: { id: string; token: string };
   let conversationId: string;
   let messageId: string;
+  let secondMessageId: string;
 
   beforeAll(async () => {
     await connectTestDB();
@@ -83,20 +84,29 @@ describe("WebSocket Read Receipts & Scoped Presence (socket.presence_read.test.t
     userB = { id: uB.id, token: sB.accessToken };
     userC = { id: uC.id, token: sC.accessToken };
 
-    // Shared conversation only between User A and User B
+    // Shared direct conversation only between User A and User B
     const conv = await Conversation.create({
       type: "direct",
       directKey: `${uA.id}:${uB.id}`,
-      participantIds: [uA._id, uB._id],
+      participants: [
+        { userId: uA._id, role: "member" },
+        { userId: uB._id, role: "member" },
+      ],
     });
     conversationId = conv.id;
 
-    const msg = await Message.create({
+    const msg1 = await Message.create({
       conversationId: conv._id,
       senderId: uA._id,
       content: "Initial message to be marked read",
     });
-    messageId = msg.id;
+    const msg2 = await Message.create({
+      conversationId: conv._id,
+      senderId: uA._id,
+      content: "Second message",
+    });
+    messageId = msg1.id;
+    secondMessageId = msg2.id;
   });
 
   function createClient(token: string): Promise<ClientSocket> {
@@ -114,7 +124,7 @@ describe("WebSocket Read Receipts & Scoped Presence (socket.presence_read.test.t
   }
 
   describe("message:read (Read Receipts)", () => {
-    it("should mark message read in MongoDB and broadcast message:read_update to conversation room", async () => {
+    it("should update participant lastReadMessageId monotonically and broadcast message:read_update", async () => {
       const clientA = await createClient(userA.token);
       const clientB = await createClient(userB.token);
 
@@ -135,14 +145,14 @@ describe("WebSocket Read Receipts & Scoped Presence (socket.presence_read.test.t
         clientA.on("message:read_update", (data) => resolve(data));
       });
 
-      // User B reads User A's message
+      // User B reads the second (newer) message
       const ackRes = await new Promise<SocketAckResponse<{ status: "ok" }>>(
         (resolve) => {
           clientB.emit(
             "message:read",
             {
               conversationId,
-              messageId,
+              messageId: secondMessageId,
             },
             (ack) => resolve(ack as SocketAckResponse<{ status: "ok" }>),
           );
@@ -154,12 +164,25 @@ describe("WebSocket Read Receipts & Scoped Presence (socket.presence_read.test.t
       const readData = await readPromise;
       expect(readData.conversationId).toBe(conversationId);
       expect(readData.userId).toBe(userB.id);
-      expect(readData.lastReadMessageId).toBe(messageId);
+      expect(readData.lastReadMessageId).toBe(secondMessageId);
 
-      // Verify persistence in DB
-      const updatedMsg = await Message.findById(messageId);
-      expect(updatedMsg?.reads).toHaveLength(1);
-      expect(updatedMsg?.reads[0].userId.toString()).toBe(userB.id);
+      // Attempting to mark older messageId must NOT move pointer backward
+      await new Promise<SocketAckResponse<{ status: "ok" }>>((resolve) => {
+        clientB.emit(
+          "message:read",
+          {
+            conversationId,
+            messageId,
+          },
+          (ack) => resolve(ack as SocketAckResponse<{ status: "ok" }>),
+        );
+      });
+
+      const updatedConv = await Conversation.findById(conversationId);
+      const pB = updatedConv?.participants.find(
+        (p) => p.userId.toString() === userB.id,
+      );
+      expect(pB?.lastReadMessageId?.toString()).toBe(secondMessageId);
 
       clientA.close();
       clientB.close();
@@ -187,14 +210,26 @@ describe("WebSocket Read Receipts & Scoped Presence (socket.presence_read.test.t
   });
 
   describe("user:status (Scoped Presence)", () => {
-    it("should broadcast online and offline status ONLY to conversation partners", async () => {
-      // Connect User B (partner) and User C (stranger) first
+    it("should broadcast online and offline status ONLY to direct conversation partners (not group-only peers)", async () => {
+      // Create a group containing A and C so we verify presence does NOT fan out over groups
+      await Conversation.create({
+        type: "group",
+        name: "Presence Isolation Group",
+        createdBy: userA.id,
+        participants: [
+          { userId: userA.id, role: "admin" },
+          { userId: userC.id, role: "member" },
+        ],
+      });
+
       const clientB = await createClient(userB.token);
       const clientC = await createClient(userC.token);
 
       let userCReceivedStatus = false;
-      clientC.on("user:status", () => {
-        userCReceivedStatus = true;
+      clientC.on("user:status", (data) => {
+        if (data.userId === userA.id) {
+          userCReceivedStatus = true;
+        }
       });
 
       const userBOnlinePromise = new Promise<{
@@ -215,7 +250,6 @@ describe("WebSocket Read Receipts & Scoped Presence (socket.presence_read.test.t
       expect(onlineEvent.userId).toBe(userA.id);
       expect(onlineEvent.status).toBe("online");
 
-      // Give a brief window to ensure User C did NOT receive anything
       await new Promise((r) => setTimeout(r, 50));
       expect(userCReceivedStatus).toBe(false);
 
@@ -236,7 +270,6 @@ describe("WebSocket Read Receipts & Scoped Presence (socket.presence_read.test.t
       const offlineEvent = await userBOfflinePromise;
       expect(offlineEvent.userId).toBe(userA.id);
       expect(offlineEvent.status).toBe("offline");
-
       expect(userCReceivedStatus).toBe(false);
 
       clientB.close();

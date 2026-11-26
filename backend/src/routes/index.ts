@@ -7,7 +7,7 @@
  * - Authentication and account routes (/auth).
  * - Session management routes protected by requireAuth (/sessions).
  * - User search routes protected by requireAuth (/users).
- * - Direct conversation routes protected by requireAuth (/conversations).
+ * - Conversation routes protected by requireAuth (/conversations).
  * ============================================================================
  */
 

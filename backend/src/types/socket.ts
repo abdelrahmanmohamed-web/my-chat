@@ -41,6 +41,27 @@ export interface ServerToClientEvents {
     userId: string;
     status: "online" | "offline";
   }) => void;
+  "conversation:created": (payload: { conversation: unknown }) => void;
+  "conversation:updated": (payload: {
+    conversationId: string;
+    conversation: unknown;
+  }) => void;
+  "participant:added": (payload: {
+    conversationId: string;
+    userIds: string[];
+    conversation: unknown;
+  }) => void;
+  "participant:removed": (payload: {
+    conversationId: string;
+    userId: string;
+    deleted?: boolean;
+    promotedAdminId?: string | null;
+  }) => void;
+  "participant:role_changed": (payload: {
+    conversationId: string;
+    userId: string;
+    role: "admin" | "member";
+  }) => void;
   ping: () => void;
 }
 

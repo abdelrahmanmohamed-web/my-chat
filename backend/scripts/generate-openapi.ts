@@ -27,8 +27,10 @@ import {
   updateSessionNameSchema,
 } from "../src/modules/auth/auth.schemas.ts";
 import {
+  addParticipantsSchema,
   conversationUpdateSchema,
-  directConversationSchema,
+  createConversationSchema,
+  updateParticipantRoleSchema,
   userSearchQuerySchema,
 } from "../src/modules/conversations/conversation.schemas.ts";
 import {
@@ -355,12 +357,31 @@ function buildZodComponentSchemas(): Record<string, JsonObject> {
       },
     ),
 
-    DirectConversationRequest: convertZodToOpenApiSchema(
-      directConversationSchema,
+    CreateConversationRequest: convertZodToOpenApiSchema(
+      createConversationSchema,
+      (s) => {
+        s.description =
+          "Create/restore a direct conversation (`{ type?: 'direct', participantId }`) or create a new group conversation (`{ type: 'group', name, participantIds, avatarUrl? }`).";
+        return s;
+      },
+    ),
+
+    AddParticipantsRequest: convertZodToOpenApiSchema(
+      addParticipantsSchema,
       (s) => {
         const props = s.properties as Record<string, JsonObject>;
-        props.participantId.description =
-          "Target user's MongoDB ObjectId (24-character hex string, trimmed). Must refer to an existing user other than the caller.";
+        props.userIds.description =
+          "Array of user ObjectIds (24-character hex strings) to add to the group as members.";
+        return s;
+      },
+    ),
+
+    UpdateParticipantRoleRequest: convertZodToOpenApiSchema(
+      updateParticipantRoleSchema,
+      (s) => {
+        const props = s.properties as Record<string, JsonObject>;
+        props.role.description =
+          "Target participant role within the group ('admin' or 'member').";
         return s;
       },
     ),
@@ -370,7 +391,7 @@ function buildZodComponentSchemas(): Record<string, JsonObject> {
       (s) => {
         const props = s.properties as Record<string, JsonObject>;
         props.name.description =
-          "Custom conversation display name (trimmed). Pass null to clear the custom name and restore the counterpart's displayName.";
+          "Custom conversation display name (trimmed). For direct chats, pass null to restore the counterpart's displayName. For groups, non-empty string required.";
         props.avatarUrl.description =
           "Conversation avatar URL (trimmed). Pass null to clear.";
 
@@ -638,12 +659,27 @@ function buildReusableComponents(): JsonObject {
         },
       },
 
+      ConversationParticipant: {
+        type: "object",
+        required: ["userId", "role", "joinedAt"],
+        properties: {
+          userId: { type: "string", pattern: OBJECT_ID_PATTERN },
+          role: { type: "string", enum: ["admin", "member"] },
+          joinedAt: { type: "string", format: "date-time" },
+          lastReadMessageId: {
+            type: "string",
+            pattern: OBJECT_ID_PATTERN,
+            nullable: true,
+          },
+        },
+      },
+
       Conversation: {
         type: "object",
         required: [
           "_id",
           "type",
-          "participantIds",
+          "participants",
           "hiddenFor",
           "name",
           "avatarUrl",
@@ -653,15 +689,20 @@ function buildReusableComponents(): JsonObject {
         ],
         properties: {
           _id: { type: "string", pattern: OBJECT_ID_PATTERN },
-          type: { type: "string", enum: ["direct"] },
+          type: { type: "string", enum: ["direct", "group"] },
           directKey: {
             type: "string",
             description:
-              "Sorted pair key '<minObjectId>:<maxObjectId>' present on direct conversations.",
+              "Sorted pair key '<minObjectId>:<maxObjectId>' present only on direct conversations.",
           },
-          participantIds: {
+          participants: {
             type: "array",
-            items: { type: "string", pattern: OBJECT_ID_PATTERN },
+            items: { $ref: "#/components/schemas/ConversationParticipant" },
+          },
+          createdBy: {
+            type: "string",
+            pattern: OBJECT_ID_PATTERN,
+            nullable: true,
           },
           hiddenFor: {
             type: "array",
@@ -671,7 +712,7 @@ function buildReusableComponents(): JsonObject {
             type: "string",
             nullable: true,
             description:
-              "Custom conversation name, or dynamically resolved counterpart displayName for direct conversations when unset.",
+              "Group name, custom direct chat name, or dynamically resolved counterpart displayName for direct conversations when unset.",
           },
           avatarUrl: { type: "string", nullable: true },
           lastMessageAt: {
@@ -688,24 +729,15 @@ function buildReusableComponents(): JsonObject {
         },
       },
 
-      MessageRead: {
-        type: "object",
-        properties: {
-          _id: { type: "string", pattern: OBJECT_ID_PATTERN },
-          userId: { type: "string", pattern: OBJECT_ID_PATTERN },
-          lastReadMessageId: { type: "string", pattern: OBJECT_ID_PATTERN },
-        },
-      },
-
       Message: {
         type: "object",
         required: [
           "_id",
           "conversationId",
           "senderId",
+          "type",
           "content",
           "clientId",
-          "reads",
           "expiresAt",
           "createdAt",
           "updatedAt",
@@ -714,12 +746,9 @@ function buildReusableComponents(): JsonObject {
           _id: { type: "string", pattern: OBJECT_ID_PATTERN },
           conversationId: { type: "string", pattern: OBJECT_ID_PATTERN },
           senderId: { type: "string", pattern: OBJECT_ID_PATTERN },
+          type: { type: "string", enum: ["user", "system"] },
           content: { type: "string" },
           clientId: { type: "string", nullable: true },
-          reads: {
-            type: "array",
-            items: { $ref: "#/components/schemas/MessageRead" },
-          },
           expiresAt: {
             type: "string",
             format: "date-time",
@@ -1349,7 +1378,7 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     tags: ["Conversations"],
     summary: "List visible conversations",
     description:
-      "Returns non-hidden conversations for the authenticated user sorted by `updatedAt` descending, resolving direct conversation `name` dynamically from the counterpart user's `displayName` when no custom name is set.",
+      "Returns non-hidden direct and group conversations for the authenticated user sorted by `lastMessageAt` descending (falling back to `createdAt`), resolving direct conversation `name` dynamically from the counterpart user's `displayName` when no custom name is set.",
     responses: {
       "200": {
         description: "Visible conversations list.",
@@ -1371,15 +1400,15 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
   },
 
   "POST /api/conversations": {
-    operationId: "createOrRestoreDirectConversation",
+    operationId: "createConversation",
     tags: ["Conversations"],
-    summary: "Create or restore a direct conversation",
+    summary: "Create a direct or group conversation",
     description:
-      "Creates a 1-on-1 direct conversation with `participantId` in the request body (201) or returns/unhides an existing one (200).",
+      "Creates or restores a 1-on-1 direct conversation (`type` omitted or `'direct'`) or creates a new group conversation (`type: 'group'`, with the creator assigned as `admin`).",
     requestBody: {
       required: true,
-      description: "Target participant identifier.",
-      schemaRef: "DirectConversationRequest",
+      description: "Direct or group conversation creation payload.",
+      schemaRef: "CreateConversationRequest",
     },
     responses: {
       "200": {
@@ -1388,7 +1417,7 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
         content: jsonBodyRef("ConversationResponse"),
       },
       "201": {
-        description: "New direct conversation created.",
+        description: "New direct or group conversation created.",
         content: jsonBodyRef("ConversationResponse"),
       },
       "400": {
@@ -1401,7 +1430,7 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
       },
       "401": { $ref: "#/components/responses/Unauthorized" },
       "404": {
-        description: "Target participant user does not exist.",
+        description: "One or more target participants do not exist.",
         content: jsonInline(
           { $ref: "#/components/schemas/ErrorResponse" },
           { error: "Participant not found" },
@@ -1418,7 +1447,7 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     tags: ["Conversations"],
     summary: "Hide a conversation for the caller",
     description:
-      "Adds the authenticated user's ID to the conversation's `hiddenFor` set without affecting the other participant.",
+      "Adds the authenticated user's ID to the conversation's `hiddenFor` set without affecting other participants.",
     pathParameters: [
       {
         name: "conversationId",
@@ -1443,7 +1472,7 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
     tags: ["Conversations"],
     summary: "Update conversation metadata",
     description:
-      "Updates `name` and/or `avatarUrl` on a conversation where the caller is a participant. Setting `name` to `null` reverts to the counterpart's `displayName` for direct chats.",
+      "Updates `name` and/or `avatarUrl` on a conversation where the caller is a participant. Group conversations require `admin` role and a non-empty name; setting `name` to `null` in direct chats reverts to the counterpart's `displayName`.",
     pathParameters: [
       {
         name: "conversationId",
@@ -1472,6 +1501,203 @@ const ENDPOINT_SPECS: Record<string, EndpointMetadata> = {
         ),
       },
       "401": { $ref: "#/components/responses/Unauthorized" },
+      "403": {
+        description: "Caller is a non-admin member in a group conversation.",
+        content: jsonInline(
+          { $ref: "#/components/schemas/ErrorResponse" },
+          { error: "Forbidden" },
+        ),
+      },
+      "404": { $ref: "#/components/responses/ConversationNotFound" },
+      "413": { $ref: "#/components/responses/PayloadTooLarge" },
+      "429": { $ref: "#/components/responses/TooManyRequests" },
+      "500": { $ref: "#/components/responses/InternalServerError" },
+    },
+  },
+
+  "POST /api/conversations/{conversationId}/participants": {
+    operationId: "addGroupParticipants",
+    tags: ["Conversations"],
+    summary: "Add participants to a group conversation",
+    description:
+      "Adds new users as `member` participants to a group conversation (admin only). Existing participants are ignored idempotently.",
+    pathParameters: [
+      {
+        name: "conversationId",
+        in: "path",
+        required: true,
+        description: "Group conversation identifier (24-character hex ObjectId).",
+        schema: { type: "string" },
+      },
+    ],
+    requestBody: {
+      required: true,
+      description: "User IDs to add to the group.",
+      schemaRef: "AddParticipantsRequest",
+    },
+    responses: {
+      "200": {
+        description: "Updated group conversation.",
+        content: jsonBodyRef("ConversationResponse"),
+      },
+      "400": {
+        description:
+          "Invalid payload, direct conversation target, or participant limit exceeded.",
+        content: jsonInline(
+          { $ref: "#/components/schemas/ErrorResponse" },
+          { error: "Invalid participants payload" },
+        ),
+      },
+      "401": { $ref: "#/components/responses/Unauthorized" },
+      "403": {
+        description: "Admin role required.",
+        content: jsonInline(
+          { $ref: "#/components/schemas/ErrorResponse" },
+          { error: "Admin role required" },
+        ),
+      },
+      "404": { $ref: "#/components/responses/ConversationNotFound" },
+      "413": { $ref: "#/components/responses/PayloadTooLarge" },
+      "429": { $ref: "#/components/responses/TooManyRequests" },
+      "500": { $ref: "#/components/responses/InternalServerError" },
+    },
+  },
+
+  "DELETE /api/conversations/{conversationId}/participants/{userId}": {
+    operationId: "removeGroupParticipant",
+    tags: ["Conversations"],
+    summary: "Remove a participant from a group conversation",
+    description:
+      "Removes a member from a group conversation (admin only). Prevents removing the last remaining admin.",
+    pathParameters: [
+      {
+        name: "conversationId",
+        in: "path",
+        required: true,
+        description: "Group conversation identifier (24-character hex ObjectId).",
+        schema: { type: "string" },
+      },
+      {
+        name: "userId",
+        in: "path",
+        required: true,
+        description: "Target participant user identifier.",
+        schema: { type: "string" },
+      },
+    ],
+    responses: {
+      "200": {
+        description: "Updated group conversation.",
+        content: jsonBodyRef("ConversationResponse"),
+      },
+      "400": {
+        description:
+          "Invalid IDs, direct conversation target, or cannot remove last admin.",
+        content: jsonInline(
+          { $ref: "#/components/schemas/ErrorResponse" },
+          { error: "Cannot remove the last admin from the group" },
+        ),
+      },
+      "401": { $ref: "#/components/responses/Unauthorized" },
+      "403": {
+        description: "Admin role required.",
+        content: jsonInline(
+          { $ref: "#/components/schemas/ErrorResponse" },
+          { error: "Admin role required" },
+        ),
+      },
+      "404": { $ref: "#/components/responses/ConversationNotFound" },
+      "429": { $ref: "#/components/responses/TooManyRequests" },
+      "500": { $ref: "#/components/responses/InternalServerError" },
+    },
+  },
+
+  "POST /api/conversations/{conversationId}/leave": {
+    operationId: "leaveGroupConversation",
+    tags: ["Conversations"],
+    summary: "Leave a group conversation",
+    description:
+      "Removes the authenticated caller from a group conversation. Automatically promotes the oldest remaining member if the last admin leaves, or deletes the group if it becomes empty.",
+    pathParameters: [
+      {
+        name: "conversationId",
+        in: "path",
+        required: true,
+        description: "Group conversation identifier (24-character hex ObjectId).",
+        schema: { type: "string" },
+      },
+    ],
+    responses: {
+      "200": {
+        description: "Updated group conversation with remaining participants.",
+        content: jsonBodyRef("ConversationResponse"),
+      },
+      "204": {
+        description:
+          "Last participant left; group conversation and messages deleted.",
+      },
+      "400": {
+        description: "Invalid conversation ID or direct conversation target.",
+        content: jsonInline(
+          { $ref: "#/components/schemas/ErrorResponse" },
+          { error: "Operation is only supported on group conversations" },
+        ),
+      },
+      "401": { $ref: "#/components/responses/Unauthorized" },
+      "404": { $ref: "#/components/responses/ConversationNotFound" },
+      "429": { $ref: "#/components/responses/TooManyRequests" },
+      "500": { $ref: "#/components/responses/InternalServerError" },
+    },
+  },
+
+  "PATCH /api/conversations/{conversationId}/participants/{userId}/role": {
+    operationId: "updateGroupParticipantRole",
+    tags: ["Conversations"],
+    summary: "Change a group participant's role",
+    description:
+      "Promotes or demotes a participant's role (`admin` or `member`) in a group conversation (admin only). Prevents demoting the last remaining admin.",
+    pathParameters: [
+      {
+        name: "conversationId",
+        in: "path",
+        required: true,
+        description: "Group conversation identifier (24-character hex ObjectId).",
+        schema: { type: "string" },
+      },
+      {
+        name: "userId",
+        in: "path",
+        required: true,
+        description: "Target participant user identifier.",
+        schema: { type: "string" },
+      },
+    ],
+    requestBody: {
+      required: true,
+      description: "Target role payload.",
+      schemaRef: "UpdateParticipantRoleRequest",
+    },
+    responses: {
+      "200": {
+        description: "Updated group conversation.",
+        content: jsonBodyRef("ConversationResponse"),
+      },
+      "400": {
+        description:
+          "Invalid payload, direct conversation target, or cannot demote last admin.",
+        content: jsonInline(
+          { $ref: "#/components/schemas/ErrorResponse" },
+          { error: "Cannot demote the last admin in the group" },
+        ),
+      },
+      "401": { $ref: "#/components/responses/Unauthorized" },
+      "403": {
+        description: "Admin role required.",
+        content: jsonInline(
+          { $ref: "#/components/schemas/ErrorResponse" },
+          { error: "Admin role required" },
+        ),
+      },
       "404": { $ref: "#/components/responses/ConversationNotFound" },
       "413": { $ref: "#/components/responses/PayloadTooLarge" },
       "429": { $ref: "#/components/responses/TooManyRequests" },
@@ -1864,7 +2090,7 @@ function buildOpenApiDocument(discoveredRoutes: DiscoveredRoute[]): JsonObject {
       {
         name: "Conversations",
         description:
-          "Direct conversation creation, listing, hiding, and metadata updates.",
+          "Direct and group conversation creation, listing, hiding, metadata updates, and group membership management.",
       },
       {
         name: "Messages",

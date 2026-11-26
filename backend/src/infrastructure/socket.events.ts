@@ -3,7 +3,7 @@
  * WebSocket Events Handler
  * ============================================================================
  * Registers event listeners for rooms, real-time messaging, typing indicators,
- * read receipts, and conversation-scoped online/offline presence tracking.
+ * read receipts, and direct-conversation-scoped online/offline presence tracking.
  * ============================================================================
  */
 
@@ -11,6 +11,10 @@ import { Types } from "mongoose";
 import type { Socket } from "socket.io";
 import type { Logger } from "pino";
 
+import {
+  getParticipantIds,
+  isParticipant,
+} from "../modules/conversations/conversation.access.ts";
 import { Conversation } from "../modules/conversations/conversation.model.ts";
 import {
   markMessageAsRead,
@@ -36,7 +40,7 @@ type AppSocket = Socket<
 const activeUserSockets = new Map<string, Set<string>>();
 
 /**
- * Broadcasts user presence (online/offline) only to participants of shared conversations.
+ * Broadcasts user presence (online/offline) only to participants of shared direct conversations.
  */
 async function broadcastPresence(
   io: AppSocketServer,
@@ -47,18 +51,15 @@ async function broadcastPresence(
   try {
     const userObjectId = new Types.ObjectId(userId);
     const conversations = await Conversation.find(
-      { participantIds: userObjectId },
-      "participantIds",
+      { type: "direct", "participants.userId": userObjectId },
+      "participants.userId",
     ).lean();
 
     const recipientIds = new Set<string>();
     for (const conv of conversations) {
-      if (conv.participantIds) {
-        for (const p of conv.participantIds) {
-          const pid = p.toString();
-          if (pid !== userId) {
-            recipientIds.add(pid);
-          }
+      for (const pid of getParticipantIds(conv)) {
+        if (pid !== userId) {
+          recipientIds.add(pid);
         }
       }
     }
@@ -100,12 +101,9 @@ export function registerSocketEvents(
         return;
       }
 
-      const isParticipant = await Conversation.exists({
-        _id: new Types.ObjectId(conversationId),
-        participantIds: new Types.ObjectId(userId),
-      });
+      const member = await isParticipant(conversationId, userId);
 
-      if (!isParticipant) {
+      if (!member) {
         ack?.({ status: "error", error: "Forbidden: Not a participant" });
         return;
       }
@@ -159,24 +157,12 @@ export function registerSocketEvents(
         data: { message: result.message, duplicate: result.duplicate },
       });
 
-      // Broadcast to active room members
-      io.to(`conversation:${payload.conversationId}`).emit("message:new", {
-        conversationId: payload.conversationId,
-        message: result.message,
-      });
-
-      // Also notify participants' personal rooms for conversation list updates
-      const conv = await Conversation.findById(
-        payload.conversationId,
-        "participantIds",
-      );
-      if (conv?.participantIds) {
-        for (const pId of conv.participantIds) {
-          io.to(`user:${pId.toString()}`).emit("message:new", {
-            conversationId: payload.conversationId,
-            message: result.message,
-          });
-        }
+      // Emit once per participant personal room to avoid duplicate delivery when also in conversation room
+      for (const pId of result.participantUserIds) {
+        io.to(`user:${pId}`).emit("message:new", {
+          conversationId: payload.conversationId,
+          message: result.message,
+        });
       }
     } catch (error) {
       logger.error({ err: error }, "Error sending message via WebSocket");
@@ -217,10 +203,12 @@ export function registerSocketEvents(
     }
   });
 
-  // 6. Typing Indicators
+  // 6. Typing Indicators (require active room membership)
   socket.on("typing:start", (conversationId) => {
     if (!Types.ObjectId.isValid(conversationId)) return;
-    socket.to(`conversation:${conversationId}`).emit("user:typing", {
+    const room = `conversation:${conversationId}`;
+    if (!socket.rooms.has(room)) return;
+    socket.to(room).emit("user:typing", {
       conversationId,
       userId,
       isTyping: true,
@@ -229,7 +217,9 @@ export function registerSocketEvents(
 
   socket.on("typing:stop", (conversationId) => {
     if (!Types.ObjectId.isValid(conversationId)) return;
-    socket.to(`conversation:${conversationId}`).emit("user:typing", {
+    const room = `conversation:${conversationId}`;
+    if (!socket.rooms.has(room)) return;
+    socket.to(room).emit("user:typing", {
       conversationId,
       userId,
       isTyping: false,

@@ -15,6 +15,11 @@ const messageSchema = new Schema(
       ref: "User",
       required: true,
     },
+    type: {
+      type: String,
+      enum: ["user", "system"],
+      default: "user",
+    },
     content: {
       type: String,
       required: true,
@@ -25,12 +30,6 @@ const messageSchema = new Schema(
       default: null,
       trim: true,
     },
-    reads: [
-      {
-        userId: { type: Schema.Types.ObjectId, ref: "User" },
-        lastReadMessageId: { type: Schema.Types.ObjectId, ref: "Message" },
-      },
-    ],
     expiresAt: {
       type: Date,
       default: null,

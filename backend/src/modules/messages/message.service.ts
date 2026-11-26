@@ -3,12 +3,17 @@
  * Message Service
  * ============================================================================
  * Handles message persistence, idempotency deduplication, conversation updates,
- * and cursor-based message history retrieval.
+ * monotonic read receipts, and cursor-based message history retrieval.
  * ============================================================================
  */
 
 import { Types } from "mongoose";
 
+import {
+  findConversationForUser,
+  getParticipantIds,
+  isParticipant,
+} from "../conversations/conversation.access.ts";
 import { Conversation } from "../conversations/conversation.model.ts";
 import { Message } from "./message.model.ts";
 import type { ListMessagesQuery, SendMessageInput } from "./message.schemas.ts";
@@ -29,14 +34,13 @@ export async function sendMessage(
   const conversationObjectId = new Types.ObjectId(conversationId);
 
   // 1. Ensure user is a participant of the conversation
-  const conversation = await Conversation.findOne({
-    _id: conversationObjectId,
-    participantIds: userObjectId,
-  });
+  const conversation = await findConversationForUser(conversationId, userId);
 
   if (!conversation) {
     return { kind: "forbidden" as const };
   }
+
+  const participantUserIds = getParticipantIds(conversation);
 
   // 2. Check for duplicate submission using clientId (Idempotency)
   if (input.clientId) {
@@ -45,7 +49,12 @@ export async function sendMessage(
       clientId: input.clientId,
     });
     if (existing) {
-      return { kind: "ok" as const, message: existing, duplicate: true };
+      return {
+        kind: "ok" as const,
+        message: existing,
+        duplicate: true,
+        participantUserIds,
+      };
     }
   }
 
@@ -53,11 +62,13 @@ export async function sendMessage(
   const message = await Message.create({
     conversationId: conversationObjectId,
     senderId: userObjectId,
+    type: "user",
     content: input.content,
     clientId: input.clientId ?? null,
   });
 
-  // 4. Update conversation metadata and unhide for participants
+  // 4. Update conversation metadata and unhide for all participants
+  const participantObjectIds = conversation.participants.map((p) => p.userId);
   await Conversation.updateOne(
     { _id: conversationObjectId },
     {
@@ -69,11 +80,16 @@ export async function sendMessage(
           content: message.content.slice(0, 200),
         },
       },
-      $pull: { hiddenFor: { $in: conversation.participantIds } },
+      $pull: { hiddenFor: { $in: participantObjectIds } },
     },
   );
 
-  return { kind: "ok" as const, message, duplicate: false };
+  return {
+    kind: "ok" as const,
+    message,
+    duplicate: false,
+    participantUserIds,
+  };
 }
 
 export async function listMessages(
@@ -88,16 +104,12 @@ export async function listMessages(
     return { kind: "invalid" as const };
   }
 
-  const userObjectId = new Types.ObjectId(userId);
   const conversationObjectId = new Types.ObjectId(conversationId);
 
   // Verify participant access
-  const isParticipant = await Conversation.exists({
-    _id: conversationObjectId,
-    participantIds: userObjectId,
-  });
+  const member = await isParticipant(conversationId, userId);
 
-  if (!isParticipant) {
+  if (!member) {
     return { kind: "forbidden" as const };
   }
 
@@ -143,37 +155,29 @@ export async function markMessageAsRead(
   const conversationObjectId = new Types.ObjectId(conversationId);
   const messageObjectId = new Types.ObjectId(messageId);
 
-  const isParticipant = await Conversation.exists({
-    _id: conversationObjectId,
-    participantIds: userObjectId,
-  });
+  const member = await isParticipant(conversationId, userId);
 
-  if (!isParticipant) {
+  if (!member) {
     return { kind: "forbidden" as const };
   }
 
-  const message = await Message.findOne({
+  const messageExists = await Message.exists({
     _id: messageObjectId,
     conversationId: conversationObjectId,
   });
 
-  if (!message) {
+  if (!messageExists) {
     return { kind: "not_found" as const };
   }
 
-  await Message.updateOne(
-    { _id: messageObjectId, conversationId: conversationObjectId },
+  // Single atomic update on the participant's read pointer; $max ensures it never moves backward.
+  await Conversation.updateOne(
     {
-      $pull: { reads: { userId: userObjectId } },
+      _id: conversationObjectId,
+      "participants.userId": userObjectId,
     },
-  );
-
-  await Message.updateOne(
-    { _id: messageObjectId, conversationId: conversationObjectId },
     {
-      $push: {
-        reads: { userId: userObjectId, lastReadMessageId: messageObjectId },
-      },
+      $max: { "participants.$.lastReadMessageId": messageObjectId },
     },
   );
 

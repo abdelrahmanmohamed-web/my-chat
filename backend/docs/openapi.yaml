@@ -26,7 +26,7 @@ tags:
   - name: Users
     description: User discovery and search for starting conversations.
   - name: Conversations
-    description: "Direct conversation creation, listing, hiding, and metadata updates."
+    description: "Direct and group conversation creation, listing, hiding, metadata updates, and group membership management."
   - name: Messages
     description: "Cursor-paginated message history, sending, and read receipts."
 paths:
@@ -36,7 +36,7 @@ paths:
         - Health
       operationId: getHealth
       summary: Liveness check
-      description: 'Returns `{ status: "ok" }` when the HTTP server is responsive.'
+      description: "Returns `{ status: \"ok\" }` when the HTTP server is responsive."
       security: []
       x-rate-limit:
         - limiter: global
@@ -868,7 +868,7 @@ paths:
         - Conversations
       operationId: listConversations
       summary: List visible conversations
-      description: "Returns non-hidden conversations for the authenticated user sorted by `updatedAt` descending, resolving direct conversation `name` dynamically from the counterpart user's `displayName` when no custom name is set."
+      description: "Returns non-hidden direct and group conversations for the authenticated user sorted by `lastMessageAt` descending (falling back to `createdAt`), resolving direct conversation `name` dynamically from the counterpart user's `displayName` when no custom name is set."
       security:
         - bearerAuth: []
       x-rate-limit:
@@ -899,18 +899,18 @@ paths:
     post:
       tags:
         - Conversations
-      operationId: createOrRestoreDirectConversation
-      summary: Create or restore a direct conversation
-      description: "Creates a 1-on-1 direct conversation with `participantId` in the request body (201) or returns/unhides an existing one (200)."
+      operationId: createConversation
+      summary: Create a direct or group conversation
+      description: "Creates or restores a 1-on-1 direct conversation (`type` omitted or `'direct'`) or creates a new group conversation (`type: 'group'`, with the creator assigned as `admin`)."
       security:
         - bearerAuth: []
       requestBody:
         required: true
-        description: Target participant identifier.
+        description: Direct or group conversation creation payload.
         content:
           "application/json":
             schema:
-              "$ref": "#/components/schemas/DirectConversationRequest"
+              "$ref": "#/components/schemas/CreateConversationRequest"
       x-rate-limit:
         - limiter: global
           windowMs: 420000
@@ -924,7 +924,7 @@ paths:
               schema:
                 "$ref": "#/components/schemas/ConversationResponse"
         "201":
-          description: New direct conversation created.
+          description: New direct or group conversation created.
           content:
             "application/json":
               schema:
@@ -945,7 +945,7 @@ paths:
         "401":
           "$ref": "#/components/responses/Unauthorized"
         "404":
-          description: Target participant user does not exist.
+          description: One or more target participants do not exist.
           content:
             "application/json":
               schema:
@@ -964,7 +964,7 @@ paths:
         - Conversations
       operationId: hideConversation
       summary: Hide a conversation for the caller
-      description: "Adds the authenticated user's ID to the conversation's `hiddenFor` set without affecting the other participant."
+      description: "Adds the authenticated user's ID to the conversation's `hiddenFor` set without affecting other participants."
       security:
         - bearerAuth: []
       parameters:
@@ -996,7 +996,7 @@ paths:
         - Conversations
       operationId: updateConversation
       summary: Update conversation metadata
-      description: "Updates `name` and/or `avatarUrl` on a conversation where the caller is a participant. Setting `name` to `null` reverts to the counterpart's `displayName` for direct chats."
+      description: "Updates `name` and/or `avatarUrl` on a conversation where the caller is a participant. Group conversations require `admin` role and a non-empty name; setting `name` to `null` in direct chats reverts to the counterpart's `displayName`."
       security:
         - bearerAuth: []
       parameters:
@@ -1040,6 +1040,246 @@ paths:
                     error: Bad request
         "401":
           "$ref": "#/components/responses/Unauthorized"
+        "403":
+          description: Caller is a non-admin member in a group conversation.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Forbidden
+        "404":
+          "$ref": "#/components/responses/ConversationNotFound"
+        "413":
+          "$ref": "#/components/responses/PayloadTooLarge"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/conversations/{conversationId}/participants":
+    post:
+      tags:
+        - Conversations
+      operationId: addGroupParticipants
+      summary: Add participants to a group conversation
+      description: "Adds new users as `member` participants to a group conversation (admin only). Existing participants are ignored idempotently."
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: "Group conversation identifier (24-character hex ObjectId)."
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: User IDs to add to the group.
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/AddParticipantsRequest"
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Updated group conversation.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ConversationResponse"
+        "400":
+          description: "Invalid payload, direct conversation target, or participant limit exceeded."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Invalid participants payload
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          description: Admin role required.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Admin role required
+        "404":
+          "$ref": "#/components/responses/ConversationNotFound"
+        "413":
+          "$ref": "#/components/responses/PayloadTooLarge"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/conversations/{conversationId}/participants/{userId}":
+    delete:
+      tags:
+        - Conversations
+      operationId: removeGroupParticipant
+      summary: Remove a participant from a group conversation
+      description: "Removes a member from a group conversation (admin only). Prevents removing the last remaining admin."
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: "Group conversation identifier (24-character hex ObjectId)."
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          description: Target participant user identifier.
+          schema:
+            type: string
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Updated group conversation.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ConversationResponse"
+        "400":
+          description: "Invalid IDs, direct conversation target, or cannot remove last admin."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Cannot remove the last admin from the group
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          description: Admin role required.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Admin role required
+        "404":
+          "$ref": "#/components/responses/ConversationNotFound"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/conversations/{conversationId}/leave":
+    post:
+      tags:
+        - Conversations
+      operationId: leaveGroupConversation
+      summary: Leave a group conversation
+      description: "Removes the authenticated caller from a group conversation. Automatically promotes the oldest remaining member if the last admin leaves, or deletes the group if it becomes empty."
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: "Group conversation identifier (24-character hex ObjectId)."
+          schema:
+            type: string
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Updated group conversation with remaining participants.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ConversationResponse"
+        "204":
+          description: "Last participant left; group conversation and messages deleted."
+        "400":
+          description: Invalid conversation ID or direct conversation target.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Operation is only supported on group conversations
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/ConversationNotFound"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+        "500":
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/conversations/{conversationId}/participants/{userId}/role":
+    patch:
+      tags:
+        - Conversations
+      operationId: updateGroupParticipantRole
+      summary: "Change a group participant's role"
+      description: "Promotes or demotes a participant's role (`admin` or `member`) in a group conversation (admin only). Prevents demoting the last remaining admin."
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: "Group conversation identifier (24-character hex ObjectId)."
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          description: Target participant user identifier.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: Target role payload.
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/UpdateParticipantRoleRequest"
+      x-rate-limit:
+        - limiter: global
+          windowMs: 420000
+          defaultLimit: 300
+          skipSuccessfulRequests: false
+      responses:
+        "200":
+          description: Updated group conversation.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ConversationResponse"
+        "400":
+          description: "Invalid payload, direct conversation target, or cannot demote last admin."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Cannot demote the last admin in the group
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          description: Admin role required.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+              example:
+                error: Admin role required
         "404":
           "$ref": "#/components/responses/ConversationNotFound"
         "413":
@@ -1170,15 +1410,69 @@ components:
           description: "New user-friendly session label (trimmed)."
       required:
         - name
-    DirectConversationRequest:
+    CreateConversationRequest:
+      anyOf:
+        - type: object
+          properties:
+            type:
+              type: string
+              enum:
+                - group
+            name:
+              type: string
+              minLength: 1
+              maxLength: 120
+            participantIds:
+              minItems: 1
+              maxItems: 99
+              type: array
+              items:
+                type: string
+                minLength: 1
+            avatarUrl:
+              nullable: true
+              type: string
+              maxLength: 2048
+          required:
+            - type
+            - name
+            - participantIds
+        - type: object
+          properties:
+            type:
+              type: string
+              enum:
+                - direct
+            participantId:
+              type: string
+              minLength: 1
+          required:
+            - participantId
+      description: "Create/restore a direct conversation (`{ type?: 'direct', participantId }`) or create a new group conversation (`{ type: 'group', name, participantIds, avatarUrl? }`)."
+    AddParticipantsRequest:
       type: object
       properties:
-        participantId:
-          type: string
-          minLength: 1
-          description: "Target user's MongoDB ObjectId (24-character hex string, trimmed). Must refer to an existing user other than the caller."
+        userIds:
+          minItems: 1
+          maxItems: 99
+          type: array
+          items:
+            type: string
+            minLength: 1
+          description: "Array of user ObjectIds (24-character hex strings) to add to the group as members."
       required:
-        - participantId
+        - userIds
+    UpdateParticipantRoleRequest:
+      type: object
+      properties:
+        role:
+          type: string
+          enum:
+            - admin
+            - member
+          description: "Target participant role within the group ('admin' or 'member')."
+      required:
+        - role
     ConversationUpdateRequest:
       type: object
       properties:
@@ -1186,7 +1480,7 @@ components:
           nullable: true
           type: string
           maxLength: 120
-          description: "Custom conversation display name (trimmed). Pass null to clear the custom name and restore the counterpart's displayName."
+          description: "Custom conversation display name (trimmed). For direct chats, pass null to restore the counterpart's displayName. For groups, non-empty string required."
         avatarUrl:
           nullable: true
           type: string
@@ -1416,12 +1710,34 @@ components:
         content:
           type: string
           maxLength: 200
+    ConversationParticipant:
+      type: object
+      required:
+        - userId
+        - role
+        - joinedAt
+      properties:
+        userId:
+          type: string
+          pattern: "^[0-9a-fA-F]{24}$"
+        role:
+          type: string
+          enum:
+            - admin
+            - member
+        joinedAt:
+          type: string
+          format: date-time
+        lastReadMessageId:
+          type: string
+          pattern: "^[0-9a-fA-F]{24}$"
+          nullable: true
     Conversation:
       type: object
       required:
         - _id
         - type
-        - participantIds
+        - participants
         - hiddenFor
         - name
         - avatarUrl
@@ -1436,14 +1752,18 @@ components:
           type: string
           enum:
             - direct
+            - group
         directKey:
           type: string
-          description: "Sorted pair key '<minObjectId>:<maxObjectId>' present on direct conversations."
-        participantIds:
+          description: "Sorted pair key '<minObjectId>:<maxObjectId>' present only on direct conversations."
+        participants:
           type: array
           items:
-            type: string
-            pattern: "^[0-9a-fA-F]{24}$"
+            "$ref": "#/components/schemas/ConversationParticipant"
+        createdBy:
+          type: string
+          pattern: "^[0-9a-fA-F]{24}$"
+          nullable: true
         hiddenFor:
           type: array
           items:
@@ -1452,7 +1772,7 @@ components:
         name:
           type: string
           nullable: true
-          description: "Custom conversation name, or dynamically resolved counterpart displayName for direct conversations when unset."
+          description: "Group name, custom direct chat name, or dynamically resolved counterpart displayName for direct conversations when unset."
         avatarUrl:
           type: string
           nullable: true
@@ -1470,27 +1790,15 @@ components:
           format: date-time
         __v:
           type: integer
-    MessageRead:
-      type: object
-      properties:
-        _id:
-          type: string
-          pattern: "^[0-9a-fA-F]{24}$"
-        userId:
-          type: string
-          pattern: "^[0-9a-fA-F]{24}$"
-        lastReadMessageId:
-          type: string
-          pattern: "^[0-9a-fA-F]{24}$"
     Message:
       type: object
       required:
         - _id
         - conversationId
         - senderId
+        - type
         - content
         - clientId
-        - reads
         - expiresAt
         - createdAt
         - updatedAt
@@ -1504,15 +1812,16 @@ components:
         senderId:
           type: string
           pattern: "^[0-9a-fA-F]{24}$"
+        type:
+          type: string
+          enum:
+            - user
+            - system
         content:
           type: string
         clientId:
           type: string
           nullable: true
-        reads:
-          type: array
-          items:
-            "$ref": "#/components/schemas/MessageRead"
         expiresAt:
           type: string
           format: date-time

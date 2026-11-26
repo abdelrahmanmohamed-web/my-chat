@@ -76,7 +76,10 @@ describe("Message HTTP Routes (/api/conversations/:id/messages)", () => {
     const conv = await Conversation.create({
       type: "direct",
       directKey: `${uA.id}:${uB.id}`,
-      participantIds: [uA._id, uB._id],
+      participants: [
+        { userId: uA._id, role: "member" },
+        { userId: uB._id, role: "member" },
+      ],
     });
     conversationId = conv.id;
   });
@@ -178,6 +181,54 @@ describe("Message HTTP Routes (/api/conversations/:id/messages)", () => {
       const data = await res.json();
       expect(data.message.content).toBe("Original message");
     });
+
+    it("should block removed group member with 403 on send and list", async () => {
+      const createGroup = await fetch(`${baseUrl}/api/conversations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userA.token}`,
+        },
+        body: JSON.stringify({
+          type: "group",
+          name: "Route Group",
+          participantIds: [userB.id, userC.id],
+        }),
+      });
+      const groupId = (
+        (await createGroup.json()) as { conversation: { _id: string } }
+      ).conversation._id;
+
+      // Remove userB
+      await fetch(
+        `${baseUrl}/api/conversations/${groupId}/participants/${userB.id}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${userA.token}` },
+        },
+      );
+
+      const sendRes = await fetch(
+        `${baseUrl}/api/conversations/${groupId}/messages`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userB.token}`,
+          },
+          body: JSON.stringify({ content: "Blocked" }),
+        },
+      );
+      expect(sendRes.status).toBe(403);
+
+      const listRes = await fetch(
+        `${baseUrl}/api/conversations/${groupId}/messages`,
+        {
+          headers: { Authorization: `Bearer ${userB.token}` },
+        },
+      );
+      expect(listRes.status).toBe(403);
+    });
   });
 
   describe("GET /api/conversations/:id/messages", () => {
@@ -194,7 +245,6 @@ describe("Message HTTP Routes (/api/conversations/:id/messages)", () => {
     });
 
     it("should return paginated message history", async () => {
-      // Seed 3 messages
       for (const text of ["First", "Second", "Third"]) {
         await fetch(`${baseUrl}/api/conversations/${conversationId}/messages`, {
           method: "POST",
@@ -221,6 +271,40 @@ describe("Message HTTP Routes (/api/conversations/:id/messages)", () => {
       expect(data.messages[0].content).toBe("Third");
       expect(data.messages[1].content).toBe("Second");
       expect(data.nextCursor).toBeDefined();
+    });
+  });
+
+  describe("PATCH /api/conversations/:id/messages/:messageId/read", () => {
+    it("should persist lastReadMessageId on participant entry", async () => {
+      const sendRes = await fetch(
+        `${baseUrl}/api/conversations/${conversationId}/messages`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userA.token}`,
+          },
+          body: JSON.stringify({ content: "Mark me read" }),
+        },
+      );
+      const msgId = (
+        (await sendRes.json()) as { message: { _id: string } }
+      ).message._id;
+
+      const readRes = await fetch(
+        `${baseUrl}/api/conversations/${conversationId}/messages/${msgId}/read`,
+        {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${userB.token}` },
+        },
+      );
+      expect(readRes.status).toBe(200);
+
+      const conv = await Conversation.findById(conversationId);
+      const pB = conv?.participants.find(
+        (p) => p.userId.toString() === userB.id,
+      );
+      expect(pB?.lastReadMessageId?.toString()).toBe(msgId);
     });
   });
 });

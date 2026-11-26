@@ -8,7 +8,6 @@
 
 import { Router } from "express";
 
-import { Conversation } from "../conversations/conversation.model.ts";
 import { getSocketServer } from "../../infrastructure/socket.ts";
 import {
   listMessages,
@@ -72,25 +71,14 @@ messageRouter.post("/", async (req, res, next) => {
 
     const statusCode = result.duplicate ? 200 : 201;
 
-    // Real-time broadcast to socket rooms
+    // Emit once per participant personal room to avoid duplicate delivery when also in conversation room
     try {
       const io = getSocketServer();
-      io.to(`conversation:${conversationId}`).emit("message:new", {
-        conversationId,
-        message: result.message,
-      });
-
-      const conv = await Conversation.findById(
-        conversationId,
-        "participantIds",
-      );
-      if (conv?.participantIds) {
-        for (const pId of conv.participantIds) {
-          io.to(`user:${pId.toString()}`).emit("message:new", {
-            conversationId,
-            message: result.message,
-          });
-        }
+      for (const pId of result.participantUserIds) {
+        io.to(`user:${pId}`).emit("message:new", {
+          conversationId,
+          message: result.message,
+        });
       }
     } catch {
       // Ignored if socket server is uninitialized in standalone scripts
