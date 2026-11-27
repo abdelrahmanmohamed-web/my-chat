@@ -84,7 +84,7 @@ export function RegisterPage() {
           لديك حساب بالفعل؟{" "}
           <Link
             to={ROUTES.login}
-            className="font-medium text-primary underline-offset-4 hover:underline"
+            className="font-medium text-[#006854] underline-offset-4 hover:underline dark:text-primary"
           >
             تسجيل الدخول
           </Link>

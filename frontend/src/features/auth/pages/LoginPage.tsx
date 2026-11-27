@@ -110,7 +110,7 @@ export function LoginPage() {
           ليس لديك حساب؟{" "}
           <Link
             to={ROUTES.register}
-            className="font-medium text-primary underline-offset-4 hover:underline"
+            className="font-medium text-[#006854] underline-offset-4 hover:underline dark:text-primary"
           >
             إنشاء حساب جديد
           </Link>
