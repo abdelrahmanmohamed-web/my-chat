@@ -330,28 +330,6 @@ export function registerRealtimeHandlers(
         conversationId,
         messageId: incoming._id,
       });
-    } else if (shouldIncrementUnread) {
-      if (
-        typeof Notification !== "undefined" &&
-        Notification.permission === "granted"
-      ) {
-        try {
-          const cached = queryClient.getQueryData<Conversation[]>(
-            QUERY_KEYS.conversations,
-          );
-          const found = cached?.find((c) => c._id === conversationId);
-          const title = found?.name?.trim() || "رسالة جديدة";
-          const notif = new Notification(title, {
-            body: incoming.content,
-            tag: conversationId,
-          });
-          notif.onclick = () => {
-            window.focus();
-          };
-        } catch {
-          // Ignore notification runtime errors
-        }
-      }
     }
   };
 

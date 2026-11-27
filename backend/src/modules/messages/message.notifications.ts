@@ -11,7 +11,6 @@
 import type { Types } from "mongoose";
 
 import type { AppSocketServer } from "../../infrastructure/socket.ts";
-import { isUserConnected } from "../../infrastructure/socket.presence.ts";
 import {
   isPushConfigured,
   sendPushToUser,
@@ -42,11 +41,11 @@ async function dispatchPushNotifications(
 ): Promise<void> {
   if (!isPushConfigured()) return;
 
-  const offlineRecipientIds = params.participantUserIds.filter(
-    (pId) => pId !== params.senderId && !isUserConnected(pId),
+  const recipientIds = params.participantUserIds.filter(
+    (pId) => pId !== params.senderId,
   );
 
-  if (offlineRecipientIds.length === 0) return;
+  if (recipientIds.length === 0) return;
 
   const sender = await User.findById(params.senderId)
     .select("displayName username")
@@ -72,7 +71,7 @@ async function dispatchPushNotifications(
   };
 
   await Promise.allSettled(
-    offlineRecipientIds.map((recipientId) =>
+    recipientIds.map((recipientId) =>
       sendPushToUser(recipientId, payload, params.logger),
     ),
   );

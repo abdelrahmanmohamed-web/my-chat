@@ -72,11 +72,11 @@ self.addEventListener("push", (event) => {
         includeUncontrolled: true,
       });
 
-      // Suppress notification when any app tab is visible and focused
-      const hasFocusedVisibleClient = windowClients.some(
-        (client) => client.visibilityState === "visible" && client.focused,
+      // Suppress notification whenever any app tab is visible.
+      const hasVisibleClient = windowClients.some(
+        (client) => client.visibilityState === "visible",
       );
-      if (hasFocusedVisibleClient) {
+      if (hasVisibleClient) {
         return;
       }
 
