@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06100C"/>
+      <stop offset="55%" stop-color="#0B1C15"/>
+      <stop offset="100%" stop-color="#040907"/>
+    </linearGradient>
+    <linearGradient id="rimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34D399" stop-opacity="0.35"/>
+      <stop offset="50%" stop-color="#10B981" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#34D399" stop-opacity="0.28"/>
+    </linearGradient>
+    <radialGradient id="glowGrad" cx="48%" cy="46%" r="50%">
+      <stop offset="0%" stop-color="#10B981" stop-opacity="0.22"/>
+      <stop offset="65%" stop-color="#064E3B" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#064E3B" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="noonGrad" x1="20%" y1="10%" x2="85%" y2="95%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#E2ECE7"/>
+    </linearGradient>
+    <linearGradient id="jadeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6EE7B7"/>
+      <stop offset="50%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#bgGrad)"/>
+  <rect x="17" y="17" width="478" height="478" rx="107" fill="none" stroke="url(#rimGrad)" stroke-width="2.5"/>
+
+  <g transform="translate(256 256) scale(1.08) translate(-256 -256)">
+    
+    <path d="M 366 154 C 334 114, 294 106, 256 106 C 150 106, 106 150, 106 256 C 106 312, 118 348, 146 374 L 124 416 L 178 394 C 202 404, 228 406, 256 406 C 362 406, 406 362, 406 256 C 406 238, 404 222, 400 208" fill="none" stroke="url(#jadeGrad)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 248 184 L 280 216 L 248 248 L 216 216 Z" fill="url(#jadeGrad)"/>
+    <path d="M 342 176 L 312 194 C 324 246, 314 302, 276 324 C 244 342, 202 336, 180 306 C 160 280, 162 246, 180 220 L 156 206 C 126 250, 128 310, 162 348 C 200 388, 262 394, 308 366 C 356 334, 372 254, 342 176 Z" fill="url(#noonGrad)"/>
+  </g>
+</svg>
