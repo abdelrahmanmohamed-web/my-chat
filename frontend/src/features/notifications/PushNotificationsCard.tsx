@@ -66,7 +66,9 @@ export function PushNotificationsCard() {
             className="size-4 text-muted-foreground"
             aria-hidden="true"
           />
-          <CardTitle>إشعارات الجهاز</CardTitle>
+          <CardTitle>
+            <h2>إشعارات الجهاز</h2>
+          </CardTitle>
         </div>
         <CardDescription>
           استقبل إشعارات فورية بالرسائل الجديدة عندما يكون التطبيق مغلقاً أو في

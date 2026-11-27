@@ -112,7 +112,9 @@ export function SecuritySettingsPage() {
                 className="size-4 text-muted-foreground"
                 aria-hidden="true"
               />
-              <CardTitle>الجلسات النشطة</CardTitle>
+              <CardTitle>
+                <h2>الجلسات النشطة</h2>
+              </CardTitle>
             </div>
             <CardDescription>
               الأجهزة المتصلة بحسابك حالياً. يمكنك إعادة تسمية أي جلسة أو إنهاء

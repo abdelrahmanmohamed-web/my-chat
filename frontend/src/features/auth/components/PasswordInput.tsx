@@ -4,11 +4,14 @@ import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-type PasswordInputProps = Omit<ComponentProps<typeof Input>, "type">;
+type PasswordInputProps = Omit<ComponentProps<typeof Input>, "type"> & {
+  fieldLabel?: string;
+};
 
 export function PasswordInput({
   className,
   dir = "rtl",
+  fieldLabel = "كلمة المرور",
   ...props
 }: PasswordInputProps) {
   const [visible, setVisible] = useState(false);
@@ -26,7 +29,7 @@ export function PasswordInput({
         variant="ghost"
         size="icon-sm"
         onClick={() => setVisible((prev) => !prev)}
-        aria-label={visible ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+        aria-label={visible ? `إخفاء ${fieldLabel}` : `إظهار ${fieldLabel}`}
         aria-pressed={visible}
         className="absolute inset-y-0.5 end-1 text-muted-foreground hover:text-foreground"
       >

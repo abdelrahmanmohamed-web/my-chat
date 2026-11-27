@@ -19,7 +19,7 @@ export default defineConfig({
       },
       manifest: {
         name: "نجوى",
-        short_name: "سَمَر",
+        short_name: "نجوى",
         start_url: "/",
         display: "standalone",
         lang: "ar",

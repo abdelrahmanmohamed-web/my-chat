@@ -93,7 +93,9 @@ export function ProfileAvatarCard() {
             className="size-4 text-muted-foreground"
             aria-hidden="true"
           />
-          <CardTitle>الصورة الشخصية</CardTitle>
+          <CardTitle>
+            <h2>الصورة الشخصية</h2>
+          </CardTitle>
         </div>
         <CardDescription>
           ارفع صورة شخصية لتظهر في ملفك الشخصي وفي المحادثات.

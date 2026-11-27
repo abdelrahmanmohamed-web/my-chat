@@ -77,7 +77,9 @@ export function ChangePasswordCard() {
             className="size-4 text-muted-foreground"
             aria-hidden="true"
           />
-          <CardTitle>تغيير كلمة المرور</CardTitle>
+          <CardTitle>
+            <h2>تغيير كلمة المرور</h2>
+          </CardTitle>
         </div>
         <CardDescription>
           سيؤدي تغيير كلمة المرور إلى إنهاء جميع الجلسات الأخرى مع الإبقاء على
@@ -100,6 +102,7 @@ export function ChangePasswordCard() {
               </FieldLabel>
               <PasswordInput
                 id="current-password"
+                fieldLabel="كلمة المرور الحالية"
                 autoComplete="current-password"
                 value={currentPassword}
                 onChange={(event) => setCurrentPassword(event.target.value)}
@@ -117,6 +120,7 @@ export function ChangePasswordCard() {
               </FieldLabel>
               <PasswordInput
                 id="new-password"
+                fieldLabel="كلمة المرور الجديدة"
                 autoComplete="new-password"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}

@@ -28,14 +28,16 @@ export function AuthShell({
           <div className="flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
             <MessageSquareLockIcon className="size-6" aria-hidden="true" />
           </div>
-          <span className="text-lg font-semibold tracking-tight text-foreground">
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">
             نجوى
-          </span>
+          </h1>
         </div>
 
         <Card className="shadow-sm">
           <CardHeader className="text-start">
-            <CardTitle className="text-xl font-semibold">{title}</CardTitle>
+            <CardTitle className="text-xl font-semibold">
+              <h2>{title}</h2>
+            </CardTitle>
             <CardDescription>{description}</CardDescription>
           </CardHeader>
           <CardContent>{children}</CardContent>
