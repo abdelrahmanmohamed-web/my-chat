@@ -1,0 +1,18 @@
+# MyChat (نجوى)
+
+> Arabic-first real-time chat web application with WebSocket and REST transport resilience, session-based JWT authentication, and web push notifications.
+
+This application provides an authenticated messaging workspace built with React, TypeScript, and Socket.IO. Private API routes under `/api/` are disallowed for crawlers and require user authentication.
+
+## Application Pages
+
+- [Home Workspace](/): Main chat workspace (redirects unauthenticated visitors to the sign-in page).
+- [Sign In](/login): User authentication page.
+- [Create Account](/register): New user registration page.
+- [Security Settings](/settings/security): Account security, password, profile avatar, and push notification settings.
+
+## Machine-Readable Resources
+
+- [Web App Manifest](/manifest.webmanifest): Progressive Web App metadata, icons, and display settings.
+- [AI Resource Catalog](/.well-known/ai-catalog.json): Agentic Resource Discovery (ARD) manifest for this domain.
+- [Crawler Policy](/robots.txt): Standard crawler access directives.
